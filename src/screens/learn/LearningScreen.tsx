@@ -1,26 +1,57 @@
 // LearningScreen — owner: Khanh
 // The "already bought / learning" view: internal tabs Lessons / Projects / Q&A.
 // Kept separate from CourseDetailsScreen on purpose (see NAVIGATION-map.md).
+//
+// Real behaviour:
+// - Lessons: tapping a lesson toggles it complete/incomplete; the change
+//   is saved to AsyncStorage and drives the progress bar here AND in
+//   My Courses / Profile (single source: completedLessonIds).
+// - Projects: the submit form really adds the project (stored on-device,
+//   merged with catalog projects, survives app restarts).
+// - Q&A: posting a question, commenting and liking all work the same
+//   way — stored on-device and merged with the catalog threads.
 import { useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { ErrorView, LoadingView } from '../../components/DataState';
-import { getChapters } from '../../data/mockData';
+import ProgressBar from '../../components/ProgressBar';
+import { newLocalId, useAppState } from '../../context/AppStateContext';
+import { useAuth } from '../../context/AuthContext';
+import { getChapters, totalLessons } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourseById, fetchProjectsForCourse, fetchQuestionsForCourse } from '../../services/api';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import {
+  completedIdsFor,
+  deriveLessonStatus,
+  mergeProjects,
+  mergeQuestions,
+  progressPercentFor,
+} from '../../utils/logic';
 
 type RouteProps = NativeStackScreenProps<RootStackParamList, 'Learning'>['route'];
 type Tab = 'lessons' | 'projects' | 'qa';
 
 export default function LearningScreen() {
   const route = useRoute<RouteProps>();
+  const app = useAppState();
+  const { user } = useAuth();
+  const author = user?.name ?? 'Bạn';
   const [tab, setTab] = useState<Tab>('lessons');
+
+  // Project form
+  const [projTitle, setProjTitle] = useState('');
+  const [projDesc, setProjDesc] = useState('');
+  const [projFile, setProjFile] = useState('');
+  // Q&A form + per-question comment boxes
+  const [questionText, setQuestionText] = useState('');
+  const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
 
   const { data, loading, error, retry } = useAsyncData(async () => {
     const found = await fetchCourseById(route.params.courseId);
@@ -41,12 +72,55 @@ export default function LearningScreen() {
       </View>
     );
   }
-  const { course, projects, questions } = data;
+  const { course } = data;
+  const projects = mergeProjects(data.projects, app.state, course.id);
+  const questions = mergeQuestions(data.questions, app.state, course.id);
+  const completedIds = completedIdsFor(app.state, course.id);
+  const lessonStatus = deriveLessonStatus(course, completedIds);
+  const percent = progressPercentFor(app.state, course);
+  const total = totalLessons(course);
+
+  const submitProject = () => {
+    if (!projTitle.trim()) return;
+    app.addProject({
+      id: newLocalId('my-p'),
+      courseId: course.id,
+      author,
+      title: projTitle.trim(),
+      description: projDesc.trim(),
+      resources: projFile.trim() ? [projFile.trim()] : [],
+    });
+    setProjTitle('');
+    setProjDesc('');
+    setProjFile('');
+  };
+
+  const submitQuestion = () => {
+    if (!questionText.trim()) return;
+    app.addQuestion({
+      id: newLocalId('my-q'),
+      courseId: course.id,
+      author,
+      text: questionText.trim(),
+      likes: 0,
+      comments: [],
+    });
+    setQuestionText('');
+  };
+
+  const submitComment = (questionId: string) => {
+    if (!commentText.trim()) return;
+    app.addComment(questionId, { author, text: commentText.trim() });
+    setCommentText('');
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>{course.title}</Text>
-      <Text style={styles.hint}>♥ 231 Like · 16 Share (placeholder)</Text>
+      <Text style={styles.hint}>
+        Đã hoàn thành {completedIds.length}/{total} bài học
+      </Text>
+      <ProgressBar percent={percent} />
 
       <View style={styles.tabRow}>
         {(['lessons', 'projects', 'qa'] as Tab[]).map((t) => (
@@ -59,45 +133,90 @@ export default function LearningScreen() {
         ))}
       </View>
 
-      {tab === 'lessons' &&
-        getChapters(course).map((chapter) => (
-          <View key={chapter.id}>
-            <Text style={styles.sectionTitle}>
-              {chapter.order} - {chapter.title}
-            </Text>
-            {chapter.lessons.map((lesson, idx) => (
-              <View key={lesson.id} style={styles.lessonRow}>
-                <Text style={styles.lessonNo}>{String(idx + 1).padStart(2, '0')}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.body}>{lesson.title}</Text>
-                  <Text style={styles.hint}>{lesson.duration} mins</Text>
-                </View>
-                <Text style={styles.hint}>{lesson.status === 'completed' ? '✓' : '▶'}</Text>
-              </View>
-            ))}
-          </View>
-        ))}
+      {tab === 'lessons' && (
+        <View>
+          <Text style={styles.hint}>Chạm vào một bài học để đánh dấu đã học xong (chạm lại để bỏ).</Text>
+          {getChapters(course).map((chapter) => (
+            <View key={chapter.id}>
+              <Text style={styles.sectionTitle}>
+                {chapter.order} - {chapter.title}
+              </Text>
+              {chapter.lessons.map((lesson, idx) => {
+                const status = lessonStatus.get(lesson.id) ?? 'locked';
+                return (
+                  <TouchableOpacity
+                    key={lesson.id}
+                    style={styles.lessonRow}
+                    onPress={() => app.toggleLessonComplete(course.id, lesson.id)}
+                  >
+                    <Text style={styles.lessonNo}>{String(idx + 1).padStart(2, '0')}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.body, status === 'completed' && styles.lessonDone]}>
+                        {lesson.title}
+                      </Text>
+                      <Text style={styles.hint}>{lesson.duration} mins</Text>
+                    </View>
+                    <Text style={[styles.statusIcon, status === 'completed' && styles.statusDone]}>
+                      {status === 'completed' ? '✓' : status === 'current' ? '▶' : '🔒'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      )}
 
       {tab === 'projects' && (
         <View>
-          <View style={styles.uploadBox}>
-            <Text style={styles.body}>Upload your project here (simulated)</Text>
-          </View>
+          <Text style={styles.sectionTitle}>Nộp project của bạn</Text>
+          <TextInput style={styles.input} placeholder="Tên project *" value={projTitle} onChangeText={setProjTitle} />
+          <TextInput
+            style={[styles.input, styles.inputMulti]}
+            placeholder="Mô tả ngắn về project"
+            value={projDesc}
+            onChangeText={setProjDesc}
+            multiline
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Tên file đính kèm (vd: report.pdf)"
+            value={projFile}
+            onChangeText={setProjFile}
+          />
+          <TouchableOpacity
+            style={[styles.submitBtn, !projTitle.trim() && styles.submitBtnDisabled]}
+            onPress={submitProject}
+            disabled={!projTitle.trim()}
+          >
+            <Text style={styles.submitText}>Nộp project</Text>
+          </TouchableOpacity>
+          <Text style={styles.hint}>
+            Project được lưu trong app trên máy này và hiển thị ngay trong danh sách bên dưới.
+          </Text>
+
           <Text style={styles.sectionTitle}>Student Projects</Text>
           {projects.length === 0 ? (
             <Text style={styles.hint}>No projects yet for this course.</Text>
           ) : (
             projects.map((project) => (
               <View key={project.id} style={styles.card}>
-                <Text style={styles.bodyBold}>{project.title}</Text>
+                <Text style={styles.bodyBold}>
+                  {project.title}
+                  {project.id.startsWith('my-p') ? '  ·  Của bạn' : ''}
+                </Text>
                 <Text style={styles.hint}>{project.author}</Text>
                 <Text style={styles.body}>{project.description}</Text>
-                <Text style={styles.sectionTitle}>Resources ({project.resources.length})</Text>
-                {project.resources.map((res) => (
-                  <Text key={res} style={styles.body}>
-                    ⬇ {res}
-                  </Text>
-                ))}
+                {project.resources.length > 0 ? (
+                  <View>
+                    <Text style={styles.sectionTitle}>Resources ({project.resources.length})</Text>
+                    {project.resources.map((res) => (
+                      <Text key={res} style={styles.body}>
+                        ⬇ {res}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ))
           )}
@@ -106,22 +225,78 @@ export default function LearningScreen() {
 
       {tab === 'qa' && (
         <View>
-          {questions.length === 0 ? (
-            <Text style={styles.hint}>No questions yet for this course.</Text>
-          ) : (
-            questions.map((q) => (
-              <View key={q.id} style={styles.card}>
-                <Text style={styles.bodyBold}>{q.author}</Text>
-                <Text style={styles.body}>{q.text}</Text>
-                <Text style={styles.hint}>
-                  ♥ {q.likes} · {q.comments.length} Comment
-                </Text>
-              </View>
-            ))
-          )}
-          <View style={styles.qaInput}>
-            <Text style={styles.hint}>Write a Q&A… (posting comes in week 2)</Text>
+          <View style={styles.askBox}>
+            <TextInput
+              style={styles.askInput}
+              placeholder="Đặt câu hỏi về khóa học…"
+              value={questionText}
+              onChangeText={setQuestionText}
+              multiline
+            />
+            <TouchableOpacity
+              style={[styles.submitBtn, !questionText.trim() && styles.submitBtnDisabled]}
+              onPress={submitQuestion}
+              disabled={!questionText.trim()}
+            >
+              <Text style={styles.submitText}>Đăng câu hỏi</Text>
+            </TouchableOpacity>
           </View>
+
+          {questions.length === 0 ? (
+            <Text style={styles.hint}>Chưa có câu hỏi nào cho khóa học này. Hãy là người đầu tiên!</Text>
+          ) : (
+            questions.map((q) => {
+              const liked = app.isLiked(q.id);
+              const open = openCommentsFor === q.id;
+              return (
+                <View key={q.id} style={styles.card}>
+                  <Text style={styles.bodyBold}>
+                    {q.author}
+                    {q.id.startsWith('my-q') ? '  ·  Câu hỏi của bạn' : ''}
+                  </Text>
+                  <Text style={styles.body}>{q.text}</Text>
+                  <View style={styles.qaActions}>
+                    <TouchableOpacity onPress={() => app.toggleLike(q.id)}>
+                      <Text style={[styles.qaAction, liked && styles.qaActionActive]}>♥ {q.likes}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setOpenCommentsFor(open ? null : q.id);
+                        setCommentText('');
+                      }}
+                    >
+                      <Text style={styles.qaAction}>💬 {q.comments.length} Comment</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {q.comments.map((c, i) => (
+                    <View key={`${q.id}-c${i}`} style={styles.commentRow}>
+                      <Text style={styles.body}>
+                        <Text style={styles.bodyBold}>{c.author}: </Text>
+                        {c.text}
+                      </Text>
+                    </View>
+                  ))}
+                  {open ? (
+                    <View style={styles.commentBox}>
+                      <TextInput
+                        style={styles.commentInput}
+                        placeholder="Viết bình luận…"
+                        value={commentText}
+                        onChangeText={setCommentText}
+                      />
+                      <TouchableOpacity
+                        style={[styles.commentSend, !commentText.trim() && styles.submitBtnDisabled]}
+                        onPress={() => submitComment(q.id)}
+                        disabled={!commentText.trim()}
+                      >
+                        <Text style={styles.submitText}>Gửi</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })
+          )}
         </View>
       )}
     </ScrollView>
@@ -157,15 +332,25 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   lessonNo: { color: colors.textSecondary, fontWeight: '600' },
-  uploadBox: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
+  lessonDone: { textDecorationLine: 'line-through', color: colors.textSecondary },
+  statusIcon: { fontSize: 15 },
+  statusDone: { color: colors.price, fontWeight: '800' },
+  input: {
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginTop: spacing.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
+  inputMulti: { minHeight: 60, textAlignVertical: 'top' },
+  submitBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  submitBtnDisabled: { opacity: 0.4 },
+  submitText: { color: '#fff', fontWeight: '700' },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
@@ -173,10 +358,36 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: 4,
   },
-  qaInput: {
+  askBox: { marginTop: spacing.lg, marginBottom: spacing.md },
+  askInput: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     padding: spacing.md,
-    marginTop: spacing.lg,
+    minHeight: 56,
+    textAlignVertical: 'top',
+    marginBottom: spacing.sm,
+  },
+  qaActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.xs },
+  qaAction: { color: colors.textSecondary, fontWeight: '600', fontSize: 13 },
+  qaActionActive: { color: colors.danger },
+  commentRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  commentBox: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  commentInput: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  commentSend: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
   },
 });
