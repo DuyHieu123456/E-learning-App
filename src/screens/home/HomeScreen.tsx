@@ -7,6 +7,8 @@ import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import CourseCard from '../../components/CourseCard';
 import { ErrorView, LoadingView } from '../../components/DataState';
 import SectionHeader from '../../components/SectionHeader';
+import { useAppState } from '../../context/AppStateContext';
+import { useAuth } from '../../context/AuthContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories, fetchCourses, fetchTeachers } from '../../services/api';
@@ -18,6 +20,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
+  const app = useAppState();
   const { data, loading, error, retry } = useAsyncData(async () => {
     const [categories, courses, teachers] = await Promise.all([
       fetchCategories(),
@@ -29,7 +33,11 @@ export default function HomeScreen() {
 
   if (loading) return <LoadingView />;
   if (error || !data) return <ErrorView message={error} onRetry={retry} />;
-  const { categories, courses, teachers } = data;
+  const { categories, teachers } = data;
+  // "Popular" = most enrolled/rated first (ratingCount from the catalog).
+  const courses = data.courses.slice().sort((a, b) => b.ratingCount - a.ratingCount);
+  const firstName = user?.name.trim().split(' ').slice(-1)[0];
+  const cartCount = app.state.cart.length;
 
   return (
     <FlatList
@@ -40,11 +48,11 @@ export default function HomeScreen() {
         <View>
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.greeting}>Hello, Hieu!</Text>
+              <Text style={styles.greeting}>Hello{firstName ? `, ${firstName}` : ''}!</Text>
               <Text style={styles.sub}>What do you want to learn today?</Text>
             </View>
             <TouchableOpacity style={styles.cartBtn} onPress={() => navigation.navigate('Cart')}>
-              <Text style={styles.cartText}>Cart</Text>
+              <Text style={styles.cartText}>Cart{cartCount > 0 ? ` (${cartCount})` : ''}</Text>
             </TouchableOpacity>
           </View>
 

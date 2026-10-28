@@ -1,13 +1,25 @@
 // CourseDetailsScreen — owner: Hieu (Duy)
 // The "not yet bought" view: internal tabs Overview / Lessons / Review.
 // (The "already learning" view is a separate route: Learning — do not merge.)
+//
+// Real behaviour:
+// - Bookmark button toggles PersistedState.bookmarkedCourseIds (shows up
+//   in Profile > Saved courses).
+// - Lessons tab derives each lesson's status from real progress
+//   (deriveLessonStatus), it is NOT read from the catalog data.
+// - Review tab merges catalog reviews with reviews written on this
+//   device, and has a working write-a-review form.
+// - Footer button is state-aware: Add to cart -> (in cart) View cart ->
+//   after checkout it becomes "Vào học ngay" (Go to Learning).
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { ErrorView, LoadingView } from '../../components/DataState';
 import RatingStars from '../../components/RatingStars';
+import { newLocalId, useAppState } from '../../context/AppStateContext';
+import { useAuth } from '../../context/AuthContext';
 import { discountPercent, formatPrice, getChapters } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
@@ -15,6 +27,7 @@ import { fetchCourseById, fetchReviewsForCourse, fetchTeacherById } from '../../
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import { completedIdsFor, deriveLessonStatus, mergeReviews } from '../../utils/logic';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = NativeStackScreenProps<RootStackParamList, 'CourseDetails'>['route'];
@@ -23,7 +36,11 @@ type Tab = 'overview' | 'lessons' | 'review';
 export default function CourseDetailsScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProps>();
+  const app = useAppState();
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('overview');
+  const [myRating, setMyRating] = useState(5);
+  const [myComment, setMyComment] = useState('');
 
   const { data, loading, error, retry } = useAsyncData(async () => {
     const found = await fetchCourseById(route.params.courseId);
@@ -44,7 +61,26 @@ export default function CourseDetailsScreen() {
       </View>
     );
   }
-  const { course, teacher, reviews } = data;
+  const { course, teacher } = data;
+  const reviews = mergeReviews(data.reviews, app.state, course.id);
+  const lessonStatus = deriveLessonStatus(course, completedIdsFor(app.state, course.id));
+  const bookmarked = app.isBookmarked(course.id);
+  const purchased = app.isPurchased(course.id);
+  const inCart = app.isInCart(course.id);
+
+  const submitReview = () => {
+    const text = myComment.trim();
+    if (!text) return;
+    app.addReview({
+      id: newLocalId('my-r'),
+      courseId: course.id,
+      author: user?.name ?? 'Bạn',
+      rating: myRating,
+      comment: text,
+    });
+    setMyComment('');
+    setMyRating(5);
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -52,7 +88,17 @@ export default function CourseDetailsScreen() {
         <Text style={styles.heroTitle}>{course.title}</Text>
       </View>
 
-      <Text style={styles.title}>{course.title}</Text>
+      <View style={styles.titleRow}>
+        <Text style={[styles.title, { flex: 1 }]}>{course.title}</Text>
+        <TouchableOpacity
+          style={[styles.bookmarkBtn, bookmarked && styles.bookmarkBtnActive]}
+          onPress={() => app.toggleBookmark(course.id)}
+        >
+          <Text style={[styles.bookmarkText, bookmarked && styles.bookmarkTextActive]}>
+            {bookmarked ? '♥ Đã lưu' : '♡ Lưu'}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <RatingStars rating={course.rating} ratingCount={course.ratingCount} />
 
       <View style={styles.tabRow}>
@@ -97,18 +143,19 @@ export default function CourseDetailsScreen() {
             <Text style={styles.sectionTitle}>
               {chapter.order} - {chapter.title}
             </Text>
-            {chapter.lessons.map((lesson, idx) => (
-              <View key={lesson.id} style={styles.lessonRow}>
-                <Text style={styles.lessonNo}>{String(idx + 1).padStart(2, '0')}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.body}>{lesson.title}</Text>
-                  <Text style={styles.hint}>{lesson.duration} mins</Text>
+            {chapter.lessons.map((lesson, idx) => {
+              const status = lessonStatus.get(lesson.id) ?? 'locked';
+              return (
+                <View key={lesson.id} style={styles.lessonRow}>
+                  <Text style={styles.lessonNo}>{String(idx + 1).padStart(2, '0')}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.body}>{lesson.title}</Text>
+                    <Text style={styles.hint}>{lesson.duration} mins</Text>
+                  </View>
+                  <Text style={styles.hint}>{status === 'completed' ? '✓' : status === 'current' ? '▶' : '🔒'}</Text>
                 </View>
-                <Text style={styles.hint}>
-                  {lesson.status === 'completed' ? '✓' : lesson.status === 'current' ? '▶' : '🔒'}
-                </Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ))}
 
@@ -122,12 +169,38 @@ export default function CourseDetailsScreen() {
           ) : (
             reviews.map((review) => (
               <View key={review.id} style={styles.reviewCard}>
-                <Text style={styles.teacherName}>{review.author}</Text>
+                <Text style={styles.teacherName}>
+                  {review.author}
+                  {review.id.startsWith('my-r') ? '  ·  Đánh giá của bạn' : ''}
+                </Text>
                 <RatingStars rating={review.rating} />
                 <Text style={styles.body}>{review.comment}</Text>
               </View>
             ))
           )}
+
+          <Text style={styles.sectionTitle}>Viết đánh giá của bạn</Text>
+          <View style={styles.starRow}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <TouchableOpacity key={n} onPress={() => setMyRating(n)}>
+                <Text style={[styles.starPick, n <= myRating && styles.starPickActive]}>★</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={styles.reviewInput}
+            placeholder="Chia sẻ cảm nhận về khóa học…"
+            value={myComment}
+            onChangeText={setMyComment}
+            multiline
+          />
+          <TouchableOpacity
+            style={[styles.submitBtn, !myComment.trim() && styles.submitBtnDisabled]}
+            onPress={submitReview}
+            disabled={!myComment.trim()}
+          >
+            <Text style={styles.submitText}>Gửi đánh giá</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -138,11 +211,22 @@ export default function CourseDetailsScreen() {
             {discountPercent(course)}% Disc. {formatPrice(course.originalPrice)}
           </Text>
         </View>
-        {/* TODO(week 2): persist the cart item via storage.savePersistedState()
-            before navigating — for the Day-26 skeleton we just open Cart. */}
-        <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('Cart')}>
-          <Text style={styles.addText}>Add to cart</Text>
-        </TouchableOpacity>
+        {purchased ? (
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('Learning', { courseId: course.id })}
+          >
+            <Text style={styles.addText}>Vào học ngay</Text>
+          </TouchableOpacity>
+        ) : inCart ? (
+          <TouchableOpacity style={[styles.addBtn, styles.inCartBtn]} onPress={() => navigation.navigate('Cart')}>
+            <Text style={styles.addText}>✓ Trong giỏ — Xem giỏ</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.addBtn} onPress={() => app.addToCart(course.id)}>
+            <Text style={styles.addText}>Add to cart</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
@@ -161,7 +245,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   heroTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   title: { ...typography.heading, color: colors.text, marginBottom: spacing.sm },
+  bookmarkBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  bookmarkBtnActive: { backgroundColor: colors.primary },
+  bookmarkText: { color: colors.primaryDark, fontWeight: '700', fontSize: 13 },
+  bookmarkTextActive: { color: '#fff' },
   tabRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -205,6 +300,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: 4,
   },
+  starRow: { flexDirection: 'row', gap: spacing.xs },
+  starPick: { fontSize: 28, color: colors.border },
+  starPickActive: { color: colors.star },
+  reviewInput: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    minHeight: 64,
+    marginTop: spacing.sm,
+    textAlignVertical: 'top',
+  },
+  submitBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  submitBtnDisabled: { opacity: 0.4 },
+  submitText: { color: '#fff', fontWeight: '700' },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -221,5 +336,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
+  inCartBtn: { backgroundColor: colors.primaryDark },
   addText: { color: '#fff', fontWeight: '700' },
 });
