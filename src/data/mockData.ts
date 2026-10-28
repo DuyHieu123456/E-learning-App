@@ -16,11 +16,29 @@ export const MOCK_CURRENCY: Currency = 'VND';
 const img = (id: string, w = 800) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=60`;
 
-// Public sample videos (Google sample bucket) used as lecture-video
-// placeholders for the flagship UX course — swap for real lecture URLs
-// in the database (lessons.video_url) when the group produces them.
-const vid = (name: string) =>
-  `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/${name}.mp4`;
+// Public sample videos used as lecture-video placeholders for the
+// flagship UX course — swap for real lecture URLs in the database
+// (lessons.video_url) when the group produces them. NOTE: the original
+// host (Google's gtv-videos-bucket) started returning 403 AccessDenied
+// on 2026-10-28, so these URLs point to other public sample hosts
+// (MDN, Mux, archive.org, Unified Streaming, Apple) — every URL was
+// verified reachable (HTTP 200/206, video content) on 2026-10-28.
+const SAMPLE_VIDEOS: Record<string, string> = {
+  ForBiggerFun: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+  ForBiggerBlazes: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+  ForBiggerEscapes:
+    'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
+  ForBiggerJoyrides:
+    'https://filesamples.com/samples/video/mp4/sample_1280x720_surfing_with_audio.mp4',
+  ForBiggerMeltdowns: 'https://download.samplelib.com/mp4/sample-5s.mp4',
+  BigBuckBunny: 'https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4',
+  ElephantsDream:
+    'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+  Sintel: 'https://archive.org/download/Sintel/sintel-2048-stereo_512kb.mp4',
+  TearsOfSteel:
+    'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8',
+};
+const vid = (name: string) => SAMPLE_VIDEOS[name];
 
 export const mockCategories: Category[] = [
   { id: 'cat-design', name: 'Design' },

@@ -150,6 +150,7 @@ const vi = {
   player: {
     markComplete: 'Đánh dấu đã hoàn thành',
     completed: 'Đã hoàn thành bài này',
+    loadError: 'Không tải được video. Kiểm tra kết nối mạng rồi thử lại.',
   },
   myCourses: {
     title: 'Khóa học của tôi',
@@ -376,6 +377,7 @@ const en: typeof vi = {
   player: {
     markComplete: 'Mark as completed',
     completed: 'Lesson completed',
+    loadError: 'Could not load the video. Check your connection and try again.',
   },
   myCourses: {
     title: 'My Courses',
