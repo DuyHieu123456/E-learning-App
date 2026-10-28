@@ -5,8 +5,10 @@ import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-n
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
+import { ErrorView, LoadingView } from '../../components/DataState';
 import RatingStars from '../../components/RatingStars';
 import SectionHeader from '../../components/SectionHeader';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses, fetchTeacherById } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -19,16 +21,23 @@ type RouteProps = NativeStackScreenProps<RootStackParamList, 'TeacherProfile'>['
 export default function TeacherProfileScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProps>();
-  const teacher = fetchTeacherById(route.params.teacherId);
+  const { data, loading, error, retry } = useAsyncData(async () => {
+    const found = await fetchTeacherById(route.params.teacherId);
+    if (!found) return null;
+    const all = await fetchCourses();
+    return { teacher: found, courses: all.filter((c) => c.teacherId === found.id) };
+  }, [route.params.teacherId]);
 
-  if (!teacher) {
+  if (loading) return <LoadingView />;
+  if (error) return <ErrorView message={error} onRetry={retry} />;
+  if (!data) {
     return (
       <View style={styles.container}>
         <Text style={styles.empty}>Teacher not found.</Text>
       </View>
     );
   }
-  const courses = fetchCourses().filter((c) => c.teacherId === teacher.id);
+  const { teacher, courses } = data;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

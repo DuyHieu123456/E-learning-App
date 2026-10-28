@@ -6,7 +6,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
+import { ErrorView, LoadingView } from '../../components/DataState';
 import SectionHeader from '../../components/SectionHeader';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses, fetchCurrentUser } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -18,8 +20,12 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function UserProfileScreen() {
   const navigation = useNavigation<Nav>();
   const user = fetchCurrentUser();
+  const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
+
+  if (loading) return <LoadingView />;
+  if (error || !courses) return <ErrorView message={error} onRetry={retry} />;
   // Skeleton placeholder: first two courses stand in for "saved" courses.
-  const savedCourses = fetchCourses().slice(0, 2);
+  const savedCourses = courses.slice(0, 2);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

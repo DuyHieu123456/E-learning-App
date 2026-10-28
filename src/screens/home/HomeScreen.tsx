@@ -5,7 +5,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
+import { ErrorView, LoadingView } from '../../components/DataState';
 import SectionHeader from '../../components/SectionHeader';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories, fetchCourses, fetchTeachers } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -16,9 +18,18 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const categories = fetchCategories();
-  const courses = fetchCourses();
-  const teachers = fetchTeachers();
+  const { data, loading, error, retry } = useAsyncData(async () => {
+    const [categories, courses, teachers] = await Promise.all([
+      fetchCategories(),
+      fetchCourses(),
+      fetchTeachers(),
+    ]);
+    return { categories, courses, teachers };
+  });
+
+  if (loading) return <LoadingView />;
+  if (error || !data) return <ErrorView message={error} onRetry={retry} />;
+  const { categories, courses, teachers } = data;
 
   return (
     <FlatList

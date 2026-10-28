@@ -6,7 +6,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
+import { ErrorView, LoadingView } from '../../components/DataState';
 import SectionHeader from '../../components/SectionHeader';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -19,7 +21,10 @@ const HOT_TOPICS = ['Java', 'SQL', 'Javascript', 'Python', 'Digital marketing', 
 export default function SearchScreen() {
   const navigation = useNavigation<Nav>();
   const [query, setQuery] = useState('');
-  const categories = fetchCategories();
+  const { data: categories, loading, error, retry } = useAsyncData(() => fetchCategories());
+
+  if (loading) return <LoadingView />;
+  if (error || !categories) return <ErrorView message={error} onRetry={retry} />;
 
   const submit = () => {
     navigation.navigate('SearchResults', { query: query.trim() || undefined });

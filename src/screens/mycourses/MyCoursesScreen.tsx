@@ -7,8 +7,10 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { ErrorView, LoadingView } from '../../components/DataState';
 import ProgressBar from '../../components/ProgressBar';
 import { courseProgressPercent } from '../../data/mockData';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -24,7 +26,10 @@ const SAMPLE_COMPLETED: Record<string, string[]> = {
 
 export default function MyCoursesScreen() {
   const navigation = useNavigation<Nav>();
-  const courses = fetchCourses();
+  const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
+
+  if (loading) return <LoadingView />;
+  if (error || !courses) return <ErrorView message={error} onRetry={retry} />;
 
   return (
     <FlatList

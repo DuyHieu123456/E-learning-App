@@ -5,6 +5,8 @@ import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-n
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
+import { ErrorView, LoadingView } from '../../components/DataState';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -18,8 +20,12 @@ export default function SearchResultsScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProps>();
   const { query, categoryId } = route.params ?? {};
+  const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
 
-  const results = fetchCourses().filter((course) => {
+  if (loading) return <LoadingView />;
+  if (error || !courses) return <ErrorView message={error} onRetry={retry} />;
+
+  const results = courses.filter((course) => {
     if (categoryId && course.categoryId !== categoryId) return false;
     if (query && !course.title.toLowerCase().includes(query.toLowerCase())) return false;
     return true;

@@ -6,7 +6,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { ErrorView, LoadingView } from '../../components/DataState';
 import { getChapters } from '../../data/mockData';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourseById, fetchProjectsForCourse, fetchQuestionsForCourse } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -20,16 +22,26 @@ export default function LearningScreen() {
   const route = useRoute<RouteProps>();
   const [tab, setTab] = useState<Tab>('lessons');
 
-  const course = fetchCourseById(route.params.courseId);
-  if (!course) {
+  const { data, loading, error, retry } = useAsyncData(async () => {
+    const found = await fetchCourseById(route.params.courseId);
+    if (!found) return null;
+    const [projects, questions] = await Promise.all([
+      fetchProjectsForCourse(found.id),
+      fetchQuestionsForCourse(found.id),
+    ]);
+    return { course: found, projects, questions };
+  }, [route.params.courseId]);
+
+  if (loading) return <LoadingView />;
+  if (error) return <ErrorView message={error} onRetry={retry} />;
+  if (!data) {
     return (
       <View style={styles.container}>
         <Text style={styles.empty}>Course not found.</Text>
       </View>
     );
   }
-  const projects = fetchProjectsForCourse(course.id);
-  const questions = fetchQuestionsForCourse(course.id);
+  const { course, projects, questions } = data;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

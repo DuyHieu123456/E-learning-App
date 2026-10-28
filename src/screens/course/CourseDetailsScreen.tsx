@@ -6,8 +6,10 @@ import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-n
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { ErrorView, LoadingView } from '../../components/DataState';
 import RatingStars from '../../components/RatingStars';
 import { discountPercent, formatPrice, getChapters } from '../../data/mockData';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourseById, fetchReviewsForCourse, fetchTeacherById } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -23,16 +25,26 @@ export default function CourseDetailsScreen() {
   const route = useRoute<RouteProps>();
   const [tab, setTab] = useState<Tab>('overview');
 
-  const course = fetchCourseById(route.params.courseId);
-  if (!course) {
+  const { data, loading, error, retry } = useAsyncData(async () => {
+    const found = await fetchCourseById(route.params.courseId);
+    if (!found) return null;
+    const [teacher, reviews] = await Promise.all([
+      fetchTeacherById(found.teacherId),
+      fetchReviewsForCourse(found.id),
+    ]);
+    return { course: found, teacher, reviews };
+  }, [route.params.courseId]);
+
+  if (loading) return <LoadingView />;
+  if (error) return <ErrorView message={error} onRetry={retry} />;
+  if (!data) {
     return (
       <View style={styles.container}>
         <Text style={styles.empty}>Course not found.</Text>
       </View>
     );
   }
-  const teacher = fetchTeacherById(course.teacherId);
-  const reviews = fetchReviewsForCourse(course.id);
+  const { course, teacher, reviews } = data;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
