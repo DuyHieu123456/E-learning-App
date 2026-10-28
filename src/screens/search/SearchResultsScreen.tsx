@@ -5,15 +5,17 @@
 // (src/utils/logic.ts) — this screen only holds the filter UI state.
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
 import { ErrorView, LoadingView } from '../../components/DataState';
+import { useSettings } from '../../context/SettingsContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories, fetchCourses } from '../../services/api';
-import { colors } from '../../theme/colors';
+import type { Palette } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { filterCourses } from '../../utils/logic';
@@ -22,32 +24,36 @@ import type { PriceBand, SortKey } from '../../utils/logic';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type RouteProps = NativeStackScreenProps<RootStackParamList, 'SearchResults'>['route'];
 
-const PRICE_OPTIONS: { key: PriceBand; label: string }[] = [
-  { key: 'all', label: 'Mọi giá' },
-  { key: 'under300', label: 'Dưới 300K' },
-  { key: 'b300to450', label: '300–450K' },
-  { key: 'over450', label: 'Trên 450K' },
+const PRICE_KEYS: { key: PriceBand; labelKey: string }[] = [
+  { key: 'all', labelKey: 'results.priceAll' },
+  { key: 'under300', labelKey: 'results.priceUnder' },
+  { key: 'b300to450', labelKey: 'results.priceMid' },
+  { key: 'over450', labelKey: 'results.priceOver' },
 ];
-const RATING_OPTIONS: { key: number; label: string }[] = [
-  { key: 0, label: 'Mọi rating' },
+const RATING_KEYS: { key: number; label: string }[] = [
+  { key: 0, label: '' }, // label comes from results.ratingAll
   { key: 4.0, label: '4.0+' },
   { key: 4.5, label: '4.5+' },
 ];
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'popular', label: 'Phổ biến' },
-  { key: 'rating', label: 'Đánh giá cao' },
-  { key: 'priceAsc', label: 'Giá tăng dần' },
-  { key: 'priceDesc', label: 'Giá giảm dần' },
+const SORT_KEYS: { key: SortKey; labelKey: string }[] = [
+  { key: 'popular', labelKey: 'results.sortPopular' },
+  { key: 'rating', labelKey: 'results.sortRating' },
+  { key: 'priceAsc', labelKey: 'results.sortPriceAsc' },
+  { key: 'priceDesc', labelKey: 'results.sortPriceDesc' },
 ];
 
 export default function SearchResultsScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProps>();
+  const { colors } = useSettings();
+  const { t } = useTranslation();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [text, setText] = useState(route.params?.query ?? '');
   const [categoryId, setCategoryId] = useState<string | undefined>(route.params?.categoryId);
   const [priceBand, setPriceBand] = useState<PriceBand>('all');
   const [minRating, setMinRating] = useState(0);
   const [sort, setSort] = useState<SortKey>('popular');
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data, loading, error, retry } = useAsyncData(async () => {
     const [courses, categories] = await Promise.all([fetchCourses(), fetchCategories()]);
@@ -62,26 +68,33 @@ export default function SearchResultsScreen() {
 
   const chip = (active: boolean) => [styles.chip, active && styles.chipActive];
   const chipText = (active: boolean) => [styles.chipText, active && styles.chipTextActive];
+  const onRefresh = () => {
+    setRefreshing(true);
+    retry();
+    setTimeout(() => setRefreshing(false), 600);
+  };
 
   return (
     <FlatList
       data={results}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       ListHeaderComponent={
         <View>
           <TextInput
             style={styles.input}
-            placeholder="Search course"
+            placeholder={t('search.placeholder')}
+            placeholderTextColor={colors.textSecondary}
             value={text}
             onChangeText={setText}
             returnKeyType="search"
           />
 
-          <Text style={styles.groupLabel}>Danh mục</Text>
+          <Text style={styles.groupLabel}>{t('results.category')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
             <TouchableOpacity style={chip(!categoryId)} onPress={() => setCategoryId(undefined)}>
-              <Text style={chipText(!categoryId)}>Tất cả</Text>
+              <Text style={chipText(!categoryId)}>{t('results.all')}</Text>
             </TouchableOpacity>
             {categories.map((cat) => (
               <TouchableOpacity
@@ -94,40 +107,38 @@ export default function SearchResultsScreen() {
             ))}
           </ScrollView>
 
-          <Text style={styles.groupLabel}>Giá</Text>
+          <Text style={styles.groupLabel}>{t('results.price')}</Text>
           <View style={styles.chipRow}>
-            {PRICE_OPTIONS.map((opt) => (
+            {PRICE_KEYS.map((opt) => (
               <TouchableOpacity key={opt.key} style={chip(priceBand === opt.key)} onPress={() => setPriceBand(opt.key)}>
-                <Text style={chipText(priceBand === opt.key)}>{opt.label}</Text>
+                <Text style={chipText(priceBand === opt.key)}>{t(opt.labelKey)}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.groupLabel}>Đánh giá</Text>
+          <Text style={styles.groupLabel}>{t('results.rating')}</Text>
           <View style={styles.chipRow}>
-            {RATING_OPTIONS.map((opt) => (
+            {RATING_KEYS.map((opt) => (
               <TouchableOpacity key={opt.key} style={chip(minRating === opt.key)} onPress={() => setMinRating(opt.key)}>
-                <Text style={chipText(minRating === opt.key)}>{opt.label}</Text>
+                <Text style={chipText(minRating === opt.key)}>{opt.key === 0 ? t('results.ratingAll') : opt.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.groupLabel}>Sắp xếp</Text>
+          <Text style={styles.groupLabel}>{t('results.sort')}</Text>
           <View style={styles.chipRow}>
-            {SORT_OPTIONS.map((opt) => (
+            {SORT_KEYS.map((opt) => (
               <TouchableOpacity key={opt.key} style={chip(sort === opt.key)} onPress={() => setSort(opt.key)}>
-                <Text style={chipText(sort === opt.key)}>{opt.label}</Text>
+                <Text style={chipText(sort === opt.key)}>{t(opt.labelKey)}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.count}>{results.length} Results</Text>
-          {text.trim() ? <Text style={styles.hint}>for “{text.trim()}”</Text> : null}
+          <Text style={styles.count}>{t('results.count', { count: results.length })}</Text>
+          {text.trim() ? <Text style={styles.hint}>{t('results.forQuery', { query: text.trim() })}</Text> : null}
         </View>
       }
-      ListEmptyComponent={
-        <Text style={styles.empty}>Không có khóa học nào khớp bộ lọc. Thử từ khóa hoặc bộ lọc khác.</Text>
-      }
+      ListEmptyComponent={<Text style={styles.empty}>{t('results.empty')}</Text>}
       renderItem={({ item }) => (
         <CourseCard
           course={item}
@@ -138,29 +149,32 @@ export default function SearchResultsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: spacing.lg, backgroundColor: colors.background },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  groupLabel: { ...typography.bodyBold, color: colors.text, marginTop: spacing.md, marginBottom: spacing.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontWeight: '600', fontSize: 13 },
-  chipTextActive: { color: '#fff' },
-  count: { ...typography.heading, color: colors.text, marginTop: spacing.lg },
-  hint: { color: colors.textSecondary, marginBottom: spacing.md },
-  empty: { color: colors.textSecondary, marginTop: spacing.xl, textAlign: 'center' },
-});
+function createStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { padding: spacing.lg, backgroundColor: c.background },
+    input: {
+      backgroundColor: c.surface,
+      color: c.text,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    groupLabel: { ...typography.bodyBold, color: c.text, marginTop: spacing.md, marginBottom: spacing.sm },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    chip: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: radius.lg,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: c.surface,
+    },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipText: { color: c.text, fontWeight: '600', fontSize: 13 },
+    chipTextActive: { color: c.onPrimary },
+    count: { ...typography.heading, color: c.text, marginTop: spacing.lg },
+    hint: { color: c.textSecondary, marginBottom: spacing.md },
+    empty: { color: c.textSecondary, marginTop: spacing.xl, textAlign: 'center' },
+  });
+}
