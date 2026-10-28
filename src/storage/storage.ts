@@ -28,6 +28,8 @@ export async function loadPersistedState(): Promise<PersistedState> {
       myQuestions: parsed.myQuestions ?? [],
       myComments: parsed.myComments ?? {},
       likedQuestionIds: parsed.likedQuestionIds ?? [],
+      orders: parsed.orders ?? [],
+      quizScores: parsed.quizScores ?? [],
     };
   } catch {
     return initialPersistedState;

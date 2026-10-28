@@ -70,9 +70,23 @@ export function progressPercentFor(state: PersistedState, course: Course): numbe
 
 export interface CartTotals {
   count: number;
-  subtotal: number; // sum of current prices — what checkout "charges"
+  subtotal: number; // sum of current prices, before any promo code
   originalTotal: number; // sum of original prices
-  savings: number; // originalTotal - subtotal
+  savings: number; // originalTotal - subtotal (course discounts)
+  promoDiscount: number; // extra amount off from a promo code
+  payable: number; // subtotal - promoDiscount — what checkout "charges"
+}
+
+// Promo codes (percent off the subtotal). In a production app these would
+// be validated by the server; for the MVP they are a client-side table.
+export const PROMO_CODES: Record<string, number> = {
+  ELEARN10: 10,
+  STUDENT20: 20,
+};
+
+export function promoPercentFor(code: string | undefined): number {
+  if (!code) return 0;
+  return PROMO_CODES[code.trim().toUpperCase()] ?? 0;
 }
 
 export function cartCourses(state: PersistedState, courses: Course[]): Course[] {
@@ -82,18 +96,26 @@ export function cartCourses(state: PersistedState, courses: Course[]): Course[] 
     .filter((c): c is Course => c !== undefined);
 }
 
-export function cartTotals(state: PersistedState, courses: Course[]): CartTotals {
+export function cartTotals(state: PersistedState, courses: Course[], promoCode?: string): CartTotals {
   const items = cartCourses(state, courses);
   const subtotal = items.reduce((sum, c) => sum + c.price, 0);
   const originalTotal = items.reduce((sum, c) => sum + c.originalPrice, 0);
-  return { count: items.length, subtotal, originalTotal, savings: originalTotal - subtotal };
+  const promoDiscount = Math.round((subtotal * promoPercentFor(promoCode)) / 100);
+  return {
+    count: items.length,
+    subtotal,
+    originalTotal,
+    savings: originalTotal - subtotal,
+    promoDiscount,
+    payable: subtotal - promoDiscount,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Search / filter / sort (Search Results screen)
 // ---------------------------------------------------------------------------
 
-export type PriceBand = 'all' | 'under150' | '150to200' | 'over200';
+export type PriceBand = 'all' | 'under300' | 'b300to450' | 'over450';
 export type SortKey = 'popular' | 'rating' | 'priceAsc' | 'priceDesc';
 
 export interface CourseFilter {
@@ -105,13 +127,14 @@ export interface CourseFilter {
 }
 
 function inPriceBand(course: Course, band: PriceBand): boolean {
+  // Prices are VND: bands are < 300.000₫ / 300–450.000₫ / > 450.000₫.
   switch (band) {
-    case 'under150':
-      return course.price < 150;
-    case '150to200':
-      return course.price >= 150 && course.price <= 200;
-    case 'over200':
-      return course.price > 200;
+    case 'under300':
+      return course.price < 300000;
+    case 'b300to450':
+      return course.price >= 300000 && course.price <= 450000;
+    case 'over450':
+      return course.price > 450000;
     default:
       return true;
   }
@@ -151,6 +174,30 @@ export function filterCourses(courses: Course[], filter: CourseFilter): Course[]
 export function mergeReviews(catalog: Review[], state: PersistedState, courseId: string): Review[] {
   const mine = state.myReviews.filter((r) => r.courseId === courseId);
   return [...mine, ...catalog.filter((r) => r.courseId === courseId)];
+}
+
+// The course's displayed rating is a catalog aggregate (rating x
+// ratingCount). The user's own reviews are not in that aggregate, so the
+// Review tab recomputes a live average that includes them.
+export function aggregateRating(
+  course: Course,
+  myReviews: Review[],
+): { average: number; count: number } {
+  const mine = myReviews.filter((r) => r.courseId === course.id);
+  if (mine.length === 0) return { average: course.rating, count: course.ratingCount };
+  const totalScore = course.rating * course.ratingCount + mine.reduce((s, r) => s + r.rating, 0);
+  const count = course.ratingCount + mine.length;
+  return { average: Math.round((totalScore / count) * 10) / 10, count };
+}
+
+// Star distribution of a visible review list: [5★, 4★, 3★, 2★, 1★] counts.
+export function ratingDistribution(reviews: Review[]): number[] {
+  const dist = [0, 0, 0, 0, 0];
+  for (const r of reviews) {
+    const idx = 5 - Math.min(5, Math.max(1, Math.round(r.rating)));
+    dist[idx] += 1;
+  }
+  return dist;
 }
 
 export function mergeProjects(catalog: Project[], state: PersistedState, courseId: string): Project[] {

@@ -26,6 +26,9 @@ export interface Lesson {
   title: string;
   duration: string; // dạng "01:23" như mẫu FR-DETAIL-03 (phút:giây)
   status: LessonStatus;
+  // URL video bài giảng (cột lessons.video_url trên Supabase). Chỉ một số
+  // khóa có video mẫu; bài không có videoUrl thì chạm vào = đánh dấu học.
+  videoUrl?: string;
 }
 
 export interface Chapter {
@@ -65,6 +68,9 @@ export interface Project {
   title: string;
   description: string;
   resources: string[]; // tên file/tài liệu tải xuống (FR-LEARN-03)
+  // URL công khai của file người dùng đã tải lên Supabase Storage (chỉ có
+  // ở project do người dùng nộp trên máy này, sau khi upload thành công).
+  fileUrl?: string;
 }
 
 export interface QaComment {
@@ -118,6 +124,34 @@ export interface CourseProgress {
   completedLessonIds: string[];
 }
 
+// Một câu hỏi trắc nghiệm trong bài kiểm tra cuối khóa (bảng
+// quiz_questions trên Supabase; nội dung khóa học, không phải dữ liệu cá nhân).
+export interface QuizQuestion {
+  id: string;
+  courseId: string;
+  question: string;
+  options: string[]; // đúng 4 lựa chọn
+  correctIndex: number; // 0–3
+  explanation: string;
+}
+
+export interface QuizScore {
+  courseId: string;
+  correct: number;
+  total: number;
+  takenAt: number; // epoch ms của lần làm gần nhất
+}
+
+// Một lần checkout thành công (lịch sử đơn hàng ở Profile).
+export interface Order {
+  id: string;
+  courseIds: string[];
+  total: number; // số tiền đã trả (sau giảm giá + mã khuyến mãi)
+  originalTotal: number;
+  promoCode?: string;
+  createdAt: number; // epoch ms
+}
+
 export interface PersistedState {
   bookmarkedCourseIds: string[];
   cart: CartItem[];
@@ -133,4 +167,6 @@ export interface PersistedState {
   // câu hỏi (bình luận trên câu hỏi tự tạo nằm ngay trong myQuestions).
   myComments: Record<string, QaComment[]>;
   likedQuestionIds: string[];
+  orders: Order[];
+  quizScores: QuizScore[];
 }

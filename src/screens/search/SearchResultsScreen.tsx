@@ -24,9 +24,9 @@ type RouteProps = NativeStackScreenProps<RootStackParamList, 'SearchResults'>['r
 
 const PRICE_OPTIONS: { key: PriceBand; label: string }[] = [
   { key: 'all', label: 'Mọi giá' },
-  { key: 'under150', label: '< $150' },
-  { key: '150to200', label: '$150–200' },
-  { key: 'over200', label: '> $200' },
+  { key: 'under300', label: 'Dưới 300K' },
+  { key: 'b300to450', label: '300–450K' },
+  { key: 'over450', label: 'Trên 450K' },
 ];
 const RATING_OPTIONS: { key: number; label: string }[] = [
   { key: 0, label: 'Mọi rating' },

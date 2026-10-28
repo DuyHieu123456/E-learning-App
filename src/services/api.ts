@@ -39,6 +39,7 @@ import {
   mockTeachers,
   mockUser,
 } from '../data/mockData';
+import { mockQuizzes } from '../data/quizzes';
 import type {
   Category,
   Chapter,
@@ -47,6 +48,7 @@ import type {
   Project,
   QaComment,
   QaQuestion,
+  QuizQuestion,
   Review,
   Teacher,
   UserProfile,
@@ -71,6 +73,7 @@ interface Catalog {
   reviews: Review[];
   projects: Project[];
   questions: QaQuestion[];
+  quizzes: QuizQuestion[];
 }
 
 function localCatalog(): Catalog {
@@ -81,6 +84,7 @@ function localCatalog(): Catalog {
     reviews: mockReviews,
     projects: mockProjects,
     questions: mockQuestions,
+    quizzes: mockQuizzes,
   };
 }
 
@@ -122,6 +126,7 @@ function assembleCatalog(
   rawReviews: ApiRecord[],
   rawProjects: ApiRecord[],
   rawQuestions: ApiRecord[],
+  rawQuizzes: ApiRecord[],
 ): Catalog {
   const lessonsByChapter = new Map<string, ApiRecord[]>();
   for (const l of rawLessons) {
@@ -150,7 +155,14 @@ function assembleCatalog(
         const lessons: Lesson[] = (lessonsByChapter.get(chapterId) ?? []).map((l) => {
           const status = firstLessonPending ? 'current' : 'locked';
           firstLessonPending = false;
-          return { id: str(l.id), title: str(l.title), duration: str(l.duration), status };
+          const videoUrl = str(l.video_url);
+          return {
+            id: str(l.id),
+            title: str(l.title),
+            duration: str(l.duration),
+            status,
+            ...(videoUrl ? { videoUrl } : {}),
+          };
         });
         return { id: chapterId, order: num(ch.sort_order), title: str(ch.title), lessons };
       });
@@ -212,6 +224,14 @@ function assembleCatalog(
         }),
       ),
     })),
+    quizzes: rawQuizzes.map((q) => ({
+      id: str(q.id),
+      courseId: str(q.course_id),
+      question: str(q.question),
+      options: strArr(q.options),
+      correctIndex: num(q.correct_index),
+      explanation: str(q.explanation),
+    })),
   };
 }
 
@@ -227,7 +247,11 @@ async function loadCatalogFromApi(): Promise<Catalog> {
       fetchTable('projects'),
       fetchTable('questions'),
     ]);
-  return assembleCatalog(categories, teachers, courses, chapters, lessons, reviews, projects, questions);
+  // quiz_questions is an optional, later-added table: if it does not exist
+  // yet on the server, quizzes degrade to "none" instead of failing the
+  // whole catalog (the local fallback data has them).
+  const quizzes = await fetchTable('quiz_questions').catch(() => [] as ApiRecord[]);
+  return assembleCatalog(categories, teachers, courses, chapters, lessons, reviews, projects, questions, quizzes);
 }
 
 let catalogPromise: Promise<Catalog> | null = null;
@@ -290,6 +314,10 @@ export async function fetchProjectsForCourse(courseId: string): Promise<Project[
 
 export async function fetchQuestionsForCourse(courseId: string): Promise<QaQuestion[]> {
   return (await loadCatalog()).questions.filter((q) => q.courseId === courseId);
+}
+
+export async function fetchQuizForCourse(courseId: string): Promise<QuizQuestion[]> {
+  return (await loadCatalog()).quizzes.filter((q) => q.courseId === courseId);
 }
 
 // The current user is device-local (no login in the MVP), so this one

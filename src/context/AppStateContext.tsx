@@ -20,7 +20,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 
 import { initialPersistedState } from '../data/mockData';
-import type { PersistedState, Project, QaComment, QaQuestion, Review } from '../data/types';
+import type { Order, PersistedState, Project, QaComment, QaQuestion, QuizScore, Review } from '../data/types';
 import { loadPersistedState, savePersistedState } from '../storage/storage';
 
 export interface AppStateContextValue {
@@ -47,11 +47,19 @@ export interface AppStateContextValue {
 
   // User-created content
   addReview: (review: Review) => void;
+  updateReview: (id: string, rating: number, comment: string) => void;
+  removeReview: (id: string) => void;
   addProject: (project: Project) => void;
+  removeProject: (id: string) => void;
   addQuestion: (question: QaQuestion) => void;
+  removeQuestion: (id: string) => void;
   addComment: (questionId: string, comment: QaComment) => void;
   isLiked: (questionId: string) => boolean;
   toggleLike: (questionId: string) => void;
+
+  // Orders + quiz results
+  addOrder: (order: Order) => void;
+  recordQuizScore: (score: QuizScore) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -135,9 +143,29 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           followedTeacherIds: toggleInList(prev.followedTeacherIds, teacherId),
         })),
       addReview: (review) => update((prev) => ({ ...prev, myReviews: [review, ...prev.myReviews] })),
+      updateReview: (id, rating, comment) =>
+        update((prev) => ({
+          ...prev,
+          myReviews: prev.myReviews.map((r) => (r.id === id ? { ...r, rating, comment } : r)),
+        })),
+      removeReview: (id) =>
+        update((prev) => ({ ...prev, myReviews: prev.myReviews.filter((r) => r.id !== id) })),
       addProject: (project) => update((prev) => ({ ...prev, myProjects: [project, ...prev.myProjects] })),
+      removeProject: (id) =>
+        update((prev) => ({ ...prev, myProjects: prev.myProjects.filter((p) => p.id !== id) })),
       addQuestion: (question) =>
         update((prev) => ({ ...prev, myQuestions: [question, ...prev.myQuestions] })),
+      removeQuestion: (id) =>
+        update((prev) => {
+          const myComments = { ...prev.myComments };
+          delete myComments[id];
+          return {
+            ...prev,
+            myQuestions: prev.myQuestions.filter((q) => q.id !== id),
+            myComments,
+            likedQuestionIds: prev.likedQuestionIds.filter((x) => x !== id),
+          };
+        }),
       addComment: (questionId, comment) =>
         update((prev) => ({
           ...prev,
@@ -151,6 +179,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         update((prev) => ({
           ...prev,
           likedQuestionIds: toggleInList(prev.likedQuestionIds, questionId),
+        })),
+      addOrder: (order) => update((prev) => ({ ...prev, orders: [order, ...prev.orders] })),
+      recordQuizScore: (score) =>
+        update((prev) => ({
+          ...prev,
+          // Keep only the latest attempt per course.
+          quizScores: [...prev.quizScores.filter((s) => s.courseId !== score.courseId), score],
         })),
     };
   }, [state, ready, update]);
