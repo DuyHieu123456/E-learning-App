@@ -9,6 +9,8 @@ export type RootStackParamList = {
   SearchResults: { query?: string; categoryId?: string };
   TeacherProfile: { teacherId: string };
   Cart: undefined;
+  Login: undefined;
+  Register: undefined;
 };
 
 export type MainTabParamList = {

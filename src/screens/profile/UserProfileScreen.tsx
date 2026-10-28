@@ -3,15 +3,17 @@
 // Week 2: saved list comes from PersistedState.bookmarkedCourseIds.
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
 import { ErrorView, LoadingView } from '../../components/DataState';
 import SectionHeader from '../../components/SectionHeader';
+import { useAuth } from '../../context/AuthContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
-import { fetchCourses, fetchCurrentUser } from '../../services/api';
+import { fetchCourses } from '../../services/api';
 import { colors } from '../../theme/colors';
+import { radius } from '../../theme/spacing';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 
@@ -19,7 +21,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function UserProfileScreen() {
   const navigation = useNavigation<Nav>();
-  const user = fetchCurrentUser();
+  const { user, signOut } = useAuth();
   const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
 
   if (loading) return <LoadingView />;
@@ -30,10 +32,30 @@ export default function UserProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{user.name.slice(0, 1)}</Text>
+        <Text style={styles.avatarText}>{(user?.name ?? '?').slice(0, 1).toUpperCase()}</Text>
       </View>
-      <Text style={styles.name}>{user.name}</Text>
-      <Text style={styles.title}>UX/UI Designer</Text>
+      {user ? (
+        <View>
+          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.title}>{user.email}</Text>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => void signOut()}>
+            <Text style={styles.logoutText}>Đăng xuất</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View>
+          <Text style={styles.name}>Khách</Text>
+          <Text style={styles.title}>Bạn chưa đăng nhập</Text>
+          <View style={styles.authRow}>
+            <TouchableOpacity style={styles.loginBtn} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginText}>Đăng nhập</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.registerBtn} onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerText}>Đăng ký</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <View style={styles.statsRow}>
         <View style={styles.stat}>
@@ -78,6 +100,24 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 32, fontWeight: '700' },
   name: { ...typography.title, color: colors.text, textAlign: 'center', marginTop: spacing.md },
   title: { color: colors.textSecondary, textAlign: 'center', marginTop: 2 },
+  authRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.md },
+  loginBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  loginText: { color: '#fff', fontWeight: '700' },
+  registerBtn: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  registerText: { color: colors.primary, fontWeight: '700' },
+  logoutBtn: { alignSelf: 'center', marginTop: spacing.md },
+  logoutText: { color: '#D92D20', fontWeight: '600' },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: spacing.xl },
   stat: { alignItems: 'center' },
   statValue: { fontSize: 18, fontWeight: '800', color: colors.text },

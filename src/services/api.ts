@@ -52,12 +52,12 @@ import type {
   UserProfile,
 } from '../data/types';
 
-const SUPABASE_URL = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
-const SUPABASE_ANON_KEY = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabaseConfig';
+
 const TIMEOUT_MS = 8000;
 
 export function isApiConfigured(): boolean {
-  return SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+  return isSupabaseConfigured();
 }
 
 // ---------------------------------------------------------------------------

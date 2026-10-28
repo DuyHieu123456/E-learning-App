@@ -87,6 +87,22 @@ export interface UserProfile {
   avatar: string;
 }
 
+// Tài khoản đăng nhập qua Supabase Auth (bảng auth.users do Supabase quản,
+// KHÔNG phải bảng public do nhóm tự tạo). name lấy từ user_metadata khi
+// đăng ký, thiếu thì suy từ phần trước @ của email.
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface AuthSession {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number; // epoch ms
+  user: AuthUser;
+}
+
 // Chỉ 3 thứ SRS/NFR-OFF-01 đã chốt lưu AsyncStorage: bookmark, giỏ, tiến độ.
 // Tiến độ KHÔNG lưu % riêng: % tính từ completedLessonIds để khỏi lệch nhau.
 export interface CartItem {
