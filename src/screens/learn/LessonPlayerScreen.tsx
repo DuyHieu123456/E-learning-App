@@ -5,6 +5,7 @@
 // AppStateContext like everywhere else.
 import { useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +38,9 @@ export default function LessonPlayerScreen() {
   const player = useVideoPlayer(lesson?.videoUrl ?? null, (p) => {
     p.loop = false;
   });
+  // Surface playback failures (dead URL, no network) instead of a silent
+  // black box — this is how the gtv-videos-bucket 403 was first spotted.
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
 
   if (loading) return <LoadingView />;
   if (error || !course) return <ErrorView message={error} onRetry={retry} />;
@@ -53,7 +57,13 @@ export default function LessonPlayerScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {lesson.videoUrl ? (
-        <VideoView player={player} style={styles.video} nativeControls contentFit="contain" />
+        status === 'error' ? (
+          <View style={[styles.video, styles.noVideo]}>
+            <Text style={styles.noVideoText}>{t('player.loadError')}</Text>
+          </View>
+        ) : (
+          <VideoView player={player} style={styles.video} nativeControls contentFit="contain" />
+        )
       ) : (
         <View style={[styles.video, styles.noVideo]}>
           <Text style={styles.noVideoText}>{t('learn.noVideo')}</Text>
