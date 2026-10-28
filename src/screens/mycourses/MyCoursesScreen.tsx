@@ -1,44 +1,88 @@
 // MyCoursesScreen — owner: Loc
-// Day-26 skeleton: all courses with a progress bar.
-// Progress % is derived from completedLessonIds (never stored as a number).
-// Skeleton uses a small sample set of completed lessons for the first course
-// so the bar is visible; week 2 loads the real ids from AsyncStorage.
+// Shows ONLY the courses this user owns (bought through Cart checkout —
+// PersistedState.purchasedCourseIds), grouped All / On Going / Completed.
+// Progress % is derived live from completedLessonIds via AppStateContext,
+// so completing a lesson in the Learning screen updates this list (and
+// the Profile stats) immediately. An owned course counts as "On Going"
+// until it reaches 100%, then it moves to Completed.
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { ErrorView, LoadingView } from '../../components/DataState';
 import ProgressBar from '../../components/ProgressBar';
-import { courseProgressPercent } from '../../data/mockData';
+import { useAppState } from '../../context/AppStateContext';
+import { totalLessons } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import { completedIdsFor, groupOf, progressPercentFor, purchasedCourses } from '../../utils/logic';
+import type { MyCourseGroup } from '../../utils/logic';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// Sample progress for the skeleton demo only (first 2 lessons of the UX course).
-const SAMPLE_COMPLETED: Record<string, string[]> = {
-  'c-ux-research': ['ux-l1', 'ux-l2'],
-};
+const GROUPS: { key: MyCourseGroup; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'ongoing', label: 'On Going' },
+  { key: 'completed', label: 'Completed' },
+];
 
 export default function MyCoursesScreen() {
   const navigation = useNavigation<Nav>();
+  const app = useAppState();
+  const [group, setGroup] = useState<MyCourseGroup>('all');
   const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
 
   if (loading) return <LoadingView />;
   if (error || !courses) return <ErrorView message={error} onRetry={retry} />;
 
+  const owned = purchasedCourses(app.state, courses);
+  const counts: Record<MyCourseGroup, number> = {
+    all: owned.length,
+    ongoing: owned.filter((c) => groupOf(app.state, c) === 'ongoing').length,
+    completed: owned.filter((c) => groupOf(app.state, c) === 'completed').length,
+  };
+  const visible = group === 'all' ? owned : owned.filter((c) => groupOf(app.state, c) === group);
+
   return (
     <FlatList
-      data={courses}
+      data={visible}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.container}
-      ListHeaderComponent={<Text style={styles.title}>My Courses</Text>}
+      ListHeaderComponent={
+        <View>
+          <Text style={styles.title}>My Courses</Text>
+          <View style={styles.segmentRow}>
+            {GROUPS.map((g) => (
+              <TouchableOpacity
+                key={g.key}
+                style={[styles.segment, group === g.key && styles.segmentActive]}
+                onPress={() => setGroup(g.key)}
+              >
+                <Text style={[styles.segmentText, group === g.key && styles.segmentTextActive]}>
+                  {g.label} ({counts[g.key]})
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      }
+      ListEmptyComponent={
+        <Text style={styles.empty}>
+          {owned.length === 0
+            ? 'Bạn chưa mua khóa học nào.\nKhám phá khóa học ở tab Home, thêm vào giỏ và checkout — khóa học sẽ xuất hiện tại đây.'
+            : group === 'completed'
+              ? 'Chưa có khóa học nào hoàn thành 100%. Cố lên!'
+              : 'Không có khóa học nào đang học dở.'}
+        </Text>
+      }
       renderItem={({ item }) => {
-        const percent = courseProgressPercent(item, SAMPLE_COMPLETED[item.id] ?? []);
+        const percent = progressPercentFor(app.state, item);
+        const doneCount = completedIdsFor(app.state, item.id).length;
         return (
           <TouchableOpacity
             style={styles.card}
@@ -49,6 +93,10 @@ export default function MyCoursesScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.courseTitle}>{item.title}</Text>
+              <Text style={styles.hint}>
+                {doneCount}/{totalLessons(item)} bài học
+                {percent >= 100 ? '  ·  ✓ Hoàn thành' : ''}
+              </Text>
               <ProgressBar percent={percent} />
             </View>
           </TouchableOpacity>
@@ -60,7 +108,19 @@ export default function MyCoursesScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, backgroundColor: colors.background },
-  title: { ...typography.title, color: colors.text, marginBottom: spacing.lg },
+  title: { ...typography.title, color: colors.text, marginBottom: spacing.md },
+  segmentRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+  segment: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  segmentActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  segmentText: { color: colors.text, fontWeight: '600', fontSize: 13 },
+  segmentTextActive: { color: '#fff' },
   card: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -80,4 +140,6 @@ const styles = StyleSheet.create({
   },
   thumbText: { color: '#fff', fontSize: 20, fontWeight: '700' },
   courseTitle: { fontWeight: '600', color: colors.text },
+  hint: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+  empty: { color: colors.textSecondary, marginTop: spacing.xl, textAlign: 'center', lineHeight: 20 },
 });
