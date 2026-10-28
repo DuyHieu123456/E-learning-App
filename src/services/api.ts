@@ -1,25 +1,29 @@
 // Data service — E-Learning App (shared file, owner: Hieu)
 //
-// The app reads its catalog (categories, teachers, courses, chapters,
-// lessons, reviews, projects, questions) from the group's mockapi.io
-// project when EXPO_PUBLIC_API_URL is set in .env:
+// The catalog (categories, teachers, courses, chapters, lessons, reviews,
+// projects, questions) lives in a real PostgreSQL database on Supabase
+// (8 flat tables with foreign keys, exactly the ERD in the SDS). The app
+// reads it through the Supabase REST API (PostgREST) when both values are
+// set in .env:
 //
-//   EXPO_PUBLIC_API_URL=https://<project-id>.mockapi.io/api/v1
+//   EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+//   EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon public key>
 //
 // Behaviour:
-// - No URL configured, network error, or bad response -> fall back to the
-//   LOCAL mock data in src/data/mockData.ts, so the app (and the demo)
-//   never shows a blank screen just because the API is unreachable.
-// - The mockapi free plan allows only 2 resources, so the project uses a
-//   nested layout: `courses` (each record embeds chapters[] with
-//   lessons[], plus reviews[] / projects[] / questions[]) and `catalog`
-//   (one record embedding categories[] and teachers[]). This module maps
-//   that shape onto the types in src/data/types.ts. Lesson `status` does
-//   not exist on the API (it is personal progress, kept in AsyncStorage)
-//   — while assembling, the first lesson of a course is marked
-//   'current', the rest 'locked', exactly as documented in
-//   MOCKAPI-setup.md. Real per-lesson status is derived from
-//   PersistedState progress when screens are wired to it.
+// - No config, network error, or bad response -> fall back to the LOCAL
+//   mock data in src/data/mockData.ts, so the app (and the demo) never
+//   shows a blank screen just because the API is unreachable.
+// - Tables are flat (relational), so this module joins chapters/lessons
+//   into the nested Course.chapters[].lessons[] shape the screens use.
+//   Database columns are snake_case; app types are camelCase — the
+//   mapping happens here and nowhere else.
+// - Lesson `status` is NOT a database column: it is personal progress,
+//   kept in AsyncStorage. While assembling, the first lesson of a course
+//   is marked 'current', the rest 'locked'; real per-lesson status is
+//   derived from PersistedState progress when screens are wired to it.
+// - Database ids are the same text ids as the local mock data
+//   ("c-ux-research", "ux-l1", ...), so AsyncStorage bookmark / cart /
+//   progress references stay valid across API and fallback modes.
 // - The catalog is fetched once and cached in memory; call
 //   refreshCatalog() to force a refetch (used by retry buttons).
 // - Personal data (bookmark / cart / progress) is NOT here — it lives in
@@ -41,17 +45,19 @@ import type {
   Course,
   Lesson,
   Project,
+  QaComment,
   QaQuestion,
   Review,
   Teacher,
   UserProfile,
 } from '../data/types';
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').trim().replace(/\/+$/, '');
+const SUPABASE_URL = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+const SUPABASE_ANON_KEY = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
 const TIMEOUT_MS = 8000;
 
 export function isApiConfigured(): boolean {
-  return API_URL.length > 0;
+  return SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,139 +91,143 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
-const strArr = (v: unknown): string[] => {
-  if (Array.isArray(v)) return v.map(str);
-  if (typeof v === 'string') {
-    try {
-      const parsed: unknown = JSON.parse(v);
-      return Array.isArray(parsed) ? parsed.map(str) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-};
+const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.map(str) : []);
 
-async function fetchJson(path: string): Promise<ApiRecord[]> {
+async function fetchTable(table: string): Promise<ApiRecord[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(`${API_URL}${path}`, { signal: controller.signal });
-    if (!res.ok) throw new Error(`GET ${path} -> HTTP ${res.status}`);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+      signal: controller.signal,
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (!res.ok) throw new Error(`GET ${table} -> HTTP ${res.status}`);
     const json: unknown = await res.json();
-    if (!Array.isArray(json)) throw new Error(`GET ${path} -> not an array`);
+    if (!Array.isArray(json)) throw new Error(`GET ${table} -> not an array`);
     return json as ApiRecord[];
   } finally {
     clearTimeout(timer);
   }
 }
 
-// Nested fields come back as arrays when the mockapi field type preserves
-// them, but a field created with the wrong type can return a JSON string —
-// accept both instead of crashing the catalog load.
-function objArr(v: unknown): ApiRecord[] {
-  if (Array.isArray(v)) {
-    return v.filter((x): x is ApiRecord => typeof x === 'object' && x !== null);
+function assembleCatalog(
+  rawCategories: ApiRecord[],
+  rawTeachers: ApiRecord[],
+  rawCourses: ApiRecord[],
+  rawChapters: ApiRecord[],
+  rawLessons: ApiRecord[],
+  rawReviews: ApiRecord[],
+  rawProjects: ApiRecord[],
+  rawQuestions: ApiRecord[],
+): Catalog {
+  const lessonsByChapter = new Map<string, ApiRecord[]>();
+  for (const l of rawLessons) {
+    const key = str(l.chapter_id);
+    const list = lessonsByChapter.get(key) ?? [];
+    list.push(l);
+    lessonsByChapter.set(key, list);
   }
-  if (typeof v === 'string') {
-    try {
-      return objArr(JSON.parse(v));
-    } catch {
-      return [];
-    }
+
+  const chaptersByCourse = new Map<string, ApiRecord[]>();
+  for (const ch of rawChapters) {
+    const key = str(ch.course_id);
+    const list = chaptersByCourse.get(key) ?? [];
+    list.push(ch);
+    chaptersByCourse.set(key, list);
   }
-  if (typeof v === 'object' && v !== null) return [v as ApiRecord];
-  return [];
-}
-
-function assembleCatalog(rawCourses: ApiRecord[], rawCatalog: ApiRecord[]): Catalog {
-  const catalogRecord = rawCatalog[0] ?? {};
-
-  const categories: Category[] = objArr(catalogRecord.categories).map((c) => ({
-    id: str(c.id),
-    name: str(c.name),
-  }));
-  const teachers: Teacher[] = objArr(catalogRecord.teachers).map((t) => ({
-    id: str(t.id),
-    name: str(t.name),
-    title: str(t.title),
-    avatar: str(t.avatar),
-    rating: num(t.rating),
-    students: num(t.students),
-  }));
-
-  const reviews: Review[] = [];
-  const projects: Project[] = [];
-  const questions: QaQuestion[] = [];
 
   const courses: Course[] = rawCourses.map((c) => {
     const courseId = str(c.id);
     let firstLessonPending = true;
-    const chapters: Chapter[] = objArr(c.chapters)
+    const chapters: Chapter[] = (chaptersByCourse.get(courseId) ?? [])
       .slice()
-      .sort((a, b) => num(a.order) - num(b.order))
+      .sort((a, b) => num(a.sort_order) - num(b.sort_order))
       .map((ch) => {
-        const lessons: Lesson[] = objArr(ch.lessons).map((l) => {
+        const chapterId = str(ch.id);
+        const lessons: Lesson[] = (lessonsByChapter.get(chapterId) ?? []).map((l) => {
           const status = firstLessonPending ? 'current' : 'locked';
           firstLessonPending = false;
           return { id: str(l.id), title: str(l.title), duration: str(l.duration), status };
         });
-        return { id: str(ch.id), order: num(ch.order), title: str(ch.title), lessons };
+        return { id: chapterId, order: num(ch.sort_order), title: str(ch.title), lessons };
       });
-
-    objArr(c.reviews).forEach((r, i) => {
-      reviews.push({
-        id: str(r.id) || `${courseId}-rev${i + 1}`,
-        courseId,
-        author: str(r.author),
-        rating: num(r.rating),
-        comment: str(r.comment),
-      });
-    });
-    objArr(c.projects).forEach((p, i) => {
-      projects.push({
-        id: str(p.id) || `${courseId}-proj${i + 1}`,
-        courseId,
-        author: str(p.author),
-        title: str(p.title),
-        description: str(p.description),
-        resources: strArr(p.resources),
-      });
-    });
-    // Nested questions carry no comments (comments are not seeded).
-    objArr(c.questions).forEach((q, i) => {
-      questions.push({
-        id: str(q.id) || `${courseId}-q${i + 1}`,
-        courseId,
-        author: str(q.author),
-        text: str(q.text),
-        likes: num(q.likes),
-        comments: [],
-      });
-    });
 
     return {
       id: courseId,
       title: str(c.title),
-      categoryId: str(c.categoryId),
-      teacherId: str(c.teacherId),
+      categoryId: str(c.category_id),
+      teacherId: str(c.teacher_id),
       thumbnail: str(c.thumbnail),
       rating: num(c.rating),
-      ratingCount: num(c.ratingCount),
+      ratingCount: num(c.rating_count),
       price: num(c.price),
-      originalPrice: num(c.originalPrice),
+      originalPrice: num(c.original_price),
       description: str(c.description),
       benefits: strArr(c.benefits),
       chapters,
     };
   });
 
-  return { categories, teachers, courses, reviews, projects, questions };
+  return {
+    categories: rawCategories.map((c) => ({ id: str(c.id), name: str(c.name) })),
+    teachers: rawTeachers.map((t) => ({
+      id: str(t.id),
+      name: str(t.name),
+      title: str(t.title),
+      avatar: str(t.avatar),
+      rating: num(t.rating),
+      students: num(t.students),
+    })),
+    courses,
+    reviews: rawReviews.map((r) => ({
+      id: str(r.id),
+      courseId: str(r.course_id),
+      author: str(r.author),
+      rating: num(r.rating),
+      comment: str(r.comment),
+    })),
+    projects: rawProjects.map((p) => ({
+      id: str(p.id),
+      courseId: str(p.course_id),
+      author: str(p.author),
+      title: str(p.title),
+      description: str(p.description),
+      resources: strArr(p.resources),
+    })),
+    questions: rawQuestions.map((q) => ({
+      id: str(q.id),
+      courseId: str(q.course_id),
+      author: str(q.author),
+      text: str(q.text),
+      likes: num(q.likes),
+      // comments is a jsonb column holding [{ author, text }] (QaComment
+      // has no id of its own — it only exists inside its question).
+      comments: (Array.isArray(q.comments) ? q.comments : []).map(
+        (cm): QaComment => ({
+          author: str((cm as ApiRecord).author),
+          text: str((cm as ApiRecord).text),
+        }),
+      ),
+    })),
+  };
 }
 
 async function loadCatalogFromApi(): Promise<Catalog> {
-  const [courses, catalog] = await Promise.all([fetchJson('/courses'), fetchJson('/catalog')]);
-  return assembleCatalog(courses, catalog);
+  const [categories, teachers, courses, chapters, lessons, reviews, projects, questions] =
+    await Promise.all([
+      fetchTable('categories'),
+      fetchTable('teachers'),
+      fetchTable('courses'),
+      fetchTable('chapters'),
+      fetchTable('lessons'),
+      fetchTable('reviews'),
+      fetchTable('projects'),
+      fetchTable('questions'),
+    ]);
+  return assembleCatalog(categories, teachers, courses, chapters, lessons, reviews, projects, questions);
 }
 
 let catalogPromise: Promise<Catalog> | null = null;
@@ -236,7 +246,7 @@ function loadCatalog(): Promise<Catalog> {
         // failure — the next loadCatalog() call retries the API.
         catalogPromise = null;
         console.warn(
-          '[api] mockapi fetch failed, using local mock data:',
+          '[api] Supabase fetch failed, using local mock data:',
           err instanceof Error ? err.message : String(err),
         );
         return localCatalog();
@@ -247,7 +257,7 @@ function loadCatalog(): Promise<Catalog> {
 }
 
 // ---------------------------------------------------------------------------
-// Public API (all catalog functions are async now)
+// Public API (all catalog functions are async)
 // ---------------------------------------------------------------------------
 
 export async function fetchCategories(): Promise<Category[]> {
