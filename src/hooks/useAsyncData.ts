@@ -7,6 +7,7 @@
 //   if (error || !data) return <ErrorView message={error} onRetry={retry} />;
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import i18n from '../i18n';
 import { refreshCatalog } from '../services/api';
 
 export interface AsyncData<T> {
@@ -43,7 +44,7 @@ export function useAsyncData<T>(loader: () => Promise<T>, deps: readonly unknown
       })
       .catch(() => {
         if (cancelled) return;
-        setError('Không tải được dữ liệu. Kiểm tra kết nối mạng rồi thử lại.');
+        setError(i18n.t('common.errorLoad'));
         setLoading(false);
       });
     return () => {

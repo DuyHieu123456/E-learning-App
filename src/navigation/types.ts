@@ -7,12 +7,17 @@ export type RootStackParamList = {
   // NavigatorScreenParams lets stack screens jump straight to a tab,
   // e.g. after checkout: navigate('MainTabs', { screen: 'MyCourses' }).
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  Onboarding: undefined;
   CourseDetails: { courseId: string };
   Learning: { courseId: string };
+  LessonPlayer: { courseId: string; lessonId: string };
+  Quiz: { courseId: string };
+  Certificate: { courseId: string };
   SearchResults: { query?: string; categoryId?: string };
   TeacherProfile: { teacherId: string };
   Cart: undefined;
   Login: undefined;
+  Settings: undefined;
 };
 
 export type MainTabParamList = {

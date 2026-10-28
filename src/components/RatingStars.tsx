@@ -1,20 +1,29 @@
+import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '../theme/colors';
+import { useSettings } from '../context/SettingsContext';
 
 interface Props {
   rating: number; // 0–5
   ratingCount?: number;
 }
 
-// Simple text-star rating (no icon library in the skeleton yet).
+// Star rating rendered with real icons (full / half / outline).
 export default function RatingStars({ rating, ratingCount }: Props) {
-  const full = Math.round(rating);
-  const stars = '★★★★★'.slice(0, full) + '☆☆☆☆☆'.slice(0, 5 - full);
+  const { colors } = useSettings();
+  const stars = [1, 2, 3, 4, 5].map((i) => {
+    if (rating >= i - 0.25) return 'star';
+    if (rating >= i - 0.75) return 'star-half';
+    return 'star-outline';
+  });
   return (
     <View style={styles.row}>
-      <Text style={styles.stars}>{stars}</Text>
-      <Text style={styles.label}>
+      <View style={styles.starsRow}>
+        {stars.map((name, idx) => (
+          <Ionicons key={idx} name={name as never} size={13} color={colors.star} />
+        ))}
+      </View>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>
         {rating.toFixed(1)}
         {ratingCount !== undefined ? ` (${ratingCount})` : ''}
       </Text>
@@ -24,6 +33,6 @@ export default function RatingStars({ rating, ratingCount }: Props) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stars: { color: colors.star, fontSize: 13 },
-  label: { color: colors.textSecondary, fontSize: 12 },
+  starsRow: { flexDirection: 'row', gap: 1 },
+  label: { fontSize: 12 },
 });

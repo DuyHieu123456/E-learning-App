@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '../theme/colors';
+import { useSettings } from '../context/SettingsContext';
+import type { Palette } from '../theme/colors';
 import { radius, spacing } from '../theme/spacing';
 
 interface Props {
@@ -9,6 +11,8 @@ interface Props {
 }
 
 export default function ProgressBar({ percent, showLabel = true }: Props) {
+  const { colors } = useSettings();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const clamped = Math.max(0, Math.min(100, percent));
   return (
     <View>
@@ -20,14 +24,16 @@ export default function ProgressBar({ percent, showLabel = true }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  track: {
-    height: 6,
-    borderRadius: radius.sm,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-    marginTop: spacing.sm,
-  },
-  fill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.sm },
-  label: { color: colors.textSecondary, fontSize: 12, marginTop: spacing.xs },
-});
+function createStyles(c: Palette) {
+  return StyleSheet.create({
+    track: {
+      height: 6,
+      borderRadius: radius.sm,
+      backgroundColor: c.border,
+      overflow: 'hidden',
+      marginTop: spacing.sm,
+    },
+    fill: { height: '100%', backgroundColor: c.primary, borderRadius: radius.sm },
+    label: { color: c.textSecondary, fontSize: 12, marginTop: spacing.xs },
+  });
+}
