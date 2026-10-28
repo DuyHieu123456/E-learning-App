@@ -5,7 +5,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Text } from 'react-native';
 
 import LoginScreen from '../screens/auth/LoginScreen';
-import RegisterScreen from '../screens/auth/RegisterScreen';
 import CartScreen from '../screens/cart/CartScreen';
 import CourseDetailsScreen from '../screens/course/CourseDetailsScreen';
 import HomeScreen from '../screens/home/HomeScreen';
@@ -60,7 +59,6 @@ export default function RootNavigator() {
           only this route's `presentation` changes — params/files stay the same. */}
       <Stack.Screen name="Cart" component={CartScreen} options={{ title: 'Cart' }} />
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Đăng nhập' }} />
-      <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Đăng ký' }} />
     </Stack.Navigator>
   );
 }

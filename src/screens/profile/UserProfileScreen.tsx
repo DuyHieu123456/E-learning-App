@@ -48,10 +48,7 @@ export default function UserProfileScreen() {
           <Text style={styles.title}>Bạn chưa đăng nhập</Text>
           <View style={styles.authRow}>
             <TouchableOpacity style={styles.loginBtn} onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginText}>Đăng nhập</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.registerBtn} onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerText}>Đăng ký</Text>
+              <Text style={styles.loginText}>Đăng nhập bằng Google</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -108,14 +105,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   loginText: { color: '#fff', fontWeight: '700' },
-  registerBtn: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  registerText: { color: colors.primary, fontWeight: '700' },
   logoutBtn: { alignSelf: 'center', marginTop: spacing.md },
   logoutText: { color: '#D92D20', fontWeight: '600' },
   statsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: spacing.xl },

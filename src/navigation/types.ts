@@ -10,7 +10,6 @@ export type RootStackParamList = {
   TeacherProfile: { teacherId: string };
   Cart: undefined;
   Login: undefined;
-  Register: undefined;
 };
 
 export type MainTabParamList = {
