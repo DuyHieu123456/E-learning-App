@@ -1,6 +1,8 @@
 // UserProfileScreen — owner: Loc
-// Day-26 skeleton: current user + stats placeholders + saved courses list.
-// Week 2: saved list comes from PersistedState.bookmarkedCourseIds.
+// Real data throughout: the account comes from AuthContext (Supabase
+// Auth / Google), and everything else from AppStateContext — Saved =
+// courses the user actually bookmarked in Course Details; On Going /
+// Completed are counted from owned courses by their real progress.
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -8,6 +10,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import CourseCard from '../../components/CourseCard';
 import { ErrorView, LoadingView } from '../../components/DataState';
 import SectionHeader from '../../components/SectionHeader';
+import { useAppState } from '../../context/AppStateContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
@@ -16,18 +19,22 @@ import { colors } from '../../theme/colors';
 import { radius } from '../../theme/spacing';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import { groupOf, purchasedCourses } from '../../utils/logic';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function UserProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, signOut } = useAuth();
+  const app = useAppState();
   const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
 
   if (loading) return <LoadingView />;
   if (error || !courses) return <ErrorView message={error} onRetry={retry} />;
-  // Skeleton placeholder: first two courses stand in for "saved" courses.
-  const savedCourses = courses.slice(0, 2);
+  const savedCourses = courses.filter((c) => app.state.bookmarkedCourseIds.includes(c.id));
+  const owned = purchasedCourses(app.state, courses);
+  const ongoingCount = owned.filter((c) => groupOf(app.state, c) === 'ongoing').length;
+  const completedCount = owned.filter((c) => groupOf(app.state, c) === 'completed').length;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -60,16 +67,22 @@ export default function UserProfileScreen() {
           <Text style={styles.hint}>Save</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>0</Text>
+          <Text style={styles.statValue}>{ongoingCount}</Text>
           <Text style={styles.hint}>On Going</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>0</Text>
+          <Text style={styles.statValue}>{completedCount}</Text>
           <Text style={styles.hint}>Completed</Text>
         </View>
       </View>
 
       <SectionHeader title="Saved courses" />
+      {savedCourses.length === 0 ? (
+        <Text style={styles.hint}>
+          Chưa có khóa học nào được lưu. Mở một khóa học và bấm “Lưu” (bookmark) để nó xuất hiện tại
+          đây.
+        </Text>
+      ) : null}
       {savedCourses.map((course) => (
         <CourseCard
           key={course.id}

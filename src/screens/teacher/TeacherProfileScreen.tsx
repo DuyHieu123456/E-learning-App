@@ -1,13 +1,15 @@
 // TeacherProfileScreen — owner: Loc
-// Day-26 skeleton: teacher info + their courses (tab set comes later).
+// Teacher info + their courses from the catalog, with a working Follow
+// button (persisted on-device via AppStateContext).
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import CourseCard from '../../components/CourseCard';
 import { ErrorView, LoadingView } from '../../components/DataState';
 import RatingStars from '../../components/RatingStars';
 import SectionHeader from '../../components/SectionHeader';
+import { useAppState } from '../../context/AppStateContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses, fetchTeacherById } from '../../services/api';
@@ -21,6 +23,7 @@ type RouteProps = NativeStackScreenProps<RootStackParamList, 'TeacherProfile'>['
 export default function TeacherProfileScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProps>();
+  const app = useAppState();
   const { data, loading, error, retry } = useAsyncData(async () => {
     const found = await fetchTeacherById(route.params.teacherId);
     if (!found) return null;
@@ -38,6 +41,7 @@ export default function TeacherProfileScreen() {
     );
   }
   const { teacher, courses } = data;
+  const following = app.isFollowing(teacher.id);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -47,7 +51,17 @@ export default function TeacherProfileScreen() {
       <Text style={styles.name}>{teacher.name}</Text>
       <Text style={styles.title}>{teacher.title}</Text>
       <RatingStars rating={teacher.rating} />
-      <Text style={styles.hint}>{teacher.students.toLocaleString()} students</Text>
+      <Text style={styles.hint}>
+        {teacher.students.toLocaleString()} students · {courses.length} courses
+      </Text>
+      <TouchableOpacity
+        style={[styles.followBtn, following && styles.followBtnActive]}
+        onPress={() => app.toggleFollow(teacher.id)}
+      >
+        <Text style={[styles.followText, following && styles.followTextActive]}>
+          {following ? '✓ Following' : '+ Follow'}
+        </Text>
+      </TouchableOpacity>
 
       <SectionHeader title="Courses" />
       {courses.map((course) => (
@@ -79,4 +93,16 @@ const styles = StyleSheet.create({
   name: { ...typography.title, color: colors.text, textAlign: 'center', marginTop: spacing.md },
   title: { color: colors.textSecondary, textAlign: 'center', marginTop: 2 },
   hint: { color: colors.textSecondary, fontSize: 12, textAlign: 'center', marginTop: spacing.xs },
+  followBtn: {
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.md,
+  },
+  followBtnActive: { backgroundColor: colors.primary },
+  followText: { color: colors.primaryDark, fontWeight: '700' },
+  followTextActive: { color: '#fff' },
 });
