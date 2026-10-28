@@ -148,12 +148,19 @@ export const mockQuestions: QaQuestion[] = [
 
 export const mockUser: UserProfile = { id: 'u-me', name: 'Hieu', avatar: '' };
 
-// Trạng thái mẫu ban đầu: chưa bookmark, giỏ trống, chưa học bài nào.
-// Khánh (Search/Learning) và Lộc (My Courses/Profile) dùng chung các hàm dưới đây.
+// Trạng thái ban đầu: chưa bookmark, giỏ trống, chưa học/mua gì, chưa có
+// nội dung tự tạo. Cả 3 thành viên dùng chung state này qua AppStateContext.
 export const initialPersistedState: PersistedState = {
   bookmarkedCourseIds: [],
   cart: [],
   progress: [],
+  purchasedCourseIds: [],
+  followedTeacherIds: [],
+  myReviews: [],
+  myProjects: [],
+  myQuestions: [],
+  myComments: {},
+  likedQuestionIds: [],
 };
 
 // ---------------------------------------------------------------- helpers (dùng chung, không phụ thuộc UI)

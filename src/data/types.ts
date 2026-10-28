@@ -103,7 +103,11 @@ export interface AuthSession {
   user: AuthUser;
 }
 
-// Chỉ 3 thứ SRS/NFR-OFF-01 đã chốt lưu AsyncStorage: bookmark, giỏ, tiến độ.
+// Dữ liệu CÁ NHÂN lưu trên máy bằng AsyncStorage (không lên server):
+// bookmark, giỏ, tiến độ, khóa học đã mua (checkout mô phỏng), giáo viên
+// đã follow, và nội dung người dùng tự tạo trên máy này (review, project,
+// câu hỏi Q&A, bình luận, lượt like). Nội dung tự tạo được GỘP với dữ
+// liệu catalog từ Supabase khi hiển thị (xem src/utils/logic.ts).
 // Tiến độ KHÔNG lưu % riêng: % tính từ completedLessonIds để khỏi lệch nhau.
 export interface CartItem {
   courseId: string;
@@ -118,4 +122,15 @@ export interface PersistedState {
   bookmarkedCourseIds: string[];
   cart: CartItem[];
   progress: CourseProgress[];
+  // Khóa học đã "mua" qua checkout mô phỏng ở Cart — đây là danh sách
+  // hiện trong My Courses (vai trò như bảng enrollments, nhưng trên máy).
+  purchasedCourseIds: string[];
+  followedTeacherIds: string[];
+  myReviews: Review[];
+  myProjects: Project[];
+  myQuestions: QaQuestion[];
+  // Bình luận của người dùng trên câu hỏi CÓ SẴN từ server, khóa theo id
+  // câu hỏi (bình luận trên câu hỏi tự tạo nằm ngay trong myQuestions).
+  myComments: Record<string, QaComment[]>;
+  likedQuestionIds: string[];
 }

@@ -15,11 +15,19 @@ export async function loadPersistedState(): Promise<PersistedState> {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return initialPersistedState;
     const parsed = JSON.parse(raw) as PersistedState;
-    // Defensive merge so a stale/partial saved shape cannot crash screens.
+    // Defensive merge so a stale/partial saved shape cannot crash screens
+    // (older app versions saved fewer fields than the current shape).
     return {
       bookmarkedCourseIds: parsed.bookmarkedCourseIds ?? [],
       cart: parsed.cart ?? [],
       progress: parsed.progress ?? [],
+      purchasedCourseIds: parsed.purchasedCourseIds ?? [],
+      followedTeacherIds: parsed.followedTeacherIds ?? [],
+      myReviews: parsed.myReviews ?? [],
+      myProjects: parsed.myProjects ?? [],
+      myQuestions: parsed.myQuestions ?? [],
+      myComments: parsed.myComments ?? {},
+      likedQuestionIds: parsed.likedQuestionIds ?? [],
     };
   } catch {
     return initialPersistedState;
