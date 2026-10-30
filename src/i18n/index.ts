@@ -233,6 +233,12 @@ const vi = {
     skipGuest: 'Vào với tư cách khách',
     failed: 'Đăng nhập thất bại. Thử lại sau.',
   },
+  authPrompt: {
+    title: 'Cần đăng nhập',
+    body: 'Tính năng này dành cho người dùng đã đăng nhập. Khách vẫn xem được khóa học, tìm kiếm và trang giảng viên.',
+    signIn: 'Đăng nhập bằng Google',
+    later: 'Để sau',
+  },
 };
 
 const en: typeof vi = {
@@ -459,6 +465,12 @@ const en: typeof vi = {
     later: 'Later — continue browsing as a guest',
     skipGuest: 'Continue as guest',
     failed: 'Sign-in failed. Please try again later.',
+  },
+  authPrompt: {
+    title: 'Sign-in required',
+    body: 'This feature is for signed-in users. Guests can still browse courses, search and view teacher pages.',
+    signIn: 'Sign in with Google',
+    later: 'Later',
   },
 };
 

@@ -1,21 +1,21 @@
 // useRequireAuth — gate for actions that need a signed-in user.
 // Guests browse freely (Home, Search, course details, teacher pages),
 // but personal/transactional actions — cart, checkout, bookmark,
-// reviews, learning actions, project submit, Q&A, follow — send a
-// guest to the Login screen instead of running. LoginScreen returns
-// here automatically after a successful Google sign-in (goBack).
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
+// reviews, learning actions, project submit, Q&A, follow — do NOT
+// run for guests. Instead of sending the guest to a second full
+// Login screen (owner complaint 2026-10-30), the gate now opens the
+// in-place AuthPrompt modal: one tap signs in with Google right
+// there, "Later" just closes it. Returns true when the action may
+// proceed (signed in), false when it must stop (guest).
 import { useAuth } from '../context/AuthContext';
-import type { RootStackParamList } from '../navigation/types';
+import { useAuthPrompt } from '../context/AuthPromptContext';
 
 export function useRequireAuth() {
   const { user } = useAuth();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { promptLogin } = useAuthPrompt();
   return (): boolean => {
     if (user) return true;
-    navigation.navigate('Login');
+    promptLogin();
     return false;
   };
 }
