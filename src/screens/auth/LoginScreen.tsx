@@ -73,7 +73,7 @@ export default function LoginScreen() {
         onPress={submit}
         disabled={submitting}
       >
-        <Text style={styles.googleG}>G</Text>
+        <Image source={require('../../../assets/google-g.png')} style={styles.googleIcon} />
         <Text style={styles.googleText}>{submitting ? t('login.opening') : t('login.google')}</Text>
       </TouchableOpacity>
 
@@ -105,7 +105,7 @@ function createStyles(c: Palette) {
       marginTop: spacing.md,
     },
     btnDisabled: { opacity: 0.6 },
-    googleG: { color: '#4285F4', fontWeight: '800', fontSize: 18 },
+    googleIcon: { width: 20, height: 20 },
     googleText: { color: c.text, fontWeight: '700', fontSize: 15 },
     error: { color: c.danger, marginTop: spacing.md, lineHeight: 20 },
     link: { color: c.primary, fontWeight: '600', textAlign: 'center', marginTop: spacing.lg },

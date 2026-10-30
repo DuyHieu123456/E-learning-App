@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Elearning-app",
+    "name": "E-Learning App",
     "slug": "Elearning-app",
     "scheme": "elearningapp",
     "version": "1.0.0",
@@ -25,6 +25,11 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
+      "name": "E-Learning App",
+      "shortName": "E-Learning",
+      "description": "Học trực tuyến với các khóa học video, bài kiểm tra và chứng chỉ.",
+      "themeColor": "#00BCD4",
+      "backgroundColor": "#ffffff",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
