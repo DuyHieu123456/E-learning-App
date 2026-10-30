@@ -1,31 +1,42 @@
 // SettingsScreen — owner: Hieu (shared infrastructure)
 // Appearance (light/dark via SettingsContext), UI language (vi/en via
 // i18next), account summary + sign out, app version/about.
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useAuth } from '../../context/AuthContext';
+import { AuthError } from '../../services/auth';
 import { useSettings } from '../../context/SettingsContext';
-import type { RootStackParamList } from '../../navigation/types';
 import type { Palette } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 
-type Nav = NativeStackNavigationProp<RootStackParamList>;
-
 export default function SettingsScreen() {
-  const navigation = useNavigation<Nav>();
   const settings = useSettings();
-  const { user, signOut } = useAuth();
+  const { user, signOut, signInWithGoogle } = useAuth();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(settings.colors), [settings.colors]);
   const c = settings.colors;
 
   const seg = (active: boolean) => [styles.segment, active && styles.segmentActive];
   const segText = (active: boolean) => [styles.segmentText, active && styles.segmentTextActive];
+
+  const [signingIn, setSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // One-tap sign-in (same as Profile): no detour through Login.
+  const signIn = async () => {
+    setAuthError(null);
+    setSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setAuthError(err instanceof AuthError ? err.message : t('login.failed'));
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -59,9 +70,12 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.primaryText}>{t('profile.loginGoogle')}</Text>
-        </TouchableOpacity>
+        <View>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => void signIn()} disabled={signingIn}>
+            <Text style={styles.primaryText}>{signingIn ? t('login.opening') : t('profile.loginGoogle')}</Text>
+          </TouchableOpacity>
+          {authError ? <Text style={[styles.hint, { color: c.danger }]}>{authError}</Text> : null}
+        </View>
       )}
 
       <Text style={styles.group}>{t('settings.version')}</Text>

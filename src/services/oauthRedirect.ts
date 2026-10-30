@@ -8,7 +8,11 @@
 // On failure the redirect carries error / error_description instead.
 
 export function buildGoogleAuthorizeUrl(supabaseUrl: string, redirectTo: string): string {
-  return `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`;
+  // prompt=select_account: ALWAYS show Google's account chooser.
+  // Without it, Google silently reuses the browser's already-signed-in
+  // account — the user can never pick a different one (owner report
+  // 2026-10-30: sign-in "went straight into the account").
+  return `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=select_account`;
 }
 
 export interface OAuthTokens {

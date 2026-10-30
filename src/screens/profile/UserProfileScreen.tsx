@@ -22,6 +22,7 @@ import { formatPrice } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
+import { AuthError } from '../../services/auth';
 import type { Palette } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -35,12 +36,32 @@ export default function UserProfileScreen() {
   const settings = useSettings();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { user, signOut } = useAuth();
+  const { user, signOut, signInWithGoogle } = useAuth();
   const displayName = useDisplayName(user?.name);
+  // A guest must not wear the signed-in profile's edited name/avatar
+  // (owner report 2026-10-30: the name "stuck" after signing out).
+  const shownName = user ? displayName : t('common.guest');
   const app = useAppState();
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [avatarInput, setAvatarInput] = useState('');
+  const [signingIn, setSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // One-tap sign-in straight from the profile (owner request
+  // 2026-10-30: no detour through the Login screen). On success the
+  // AuthContext user flips and this screen re-renders signed-in.
+  const signIn = async () => {
+    setAuthError(null);
+    setSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setAuthError(err instanceof AuthError ? err.message : t('login.failed'));
+    } finally {
+      setSigningIn(false);
+    }
+  };
   const { data: courses, loading, error, retry } = useAsyncData(() => fetchCourses());
 
   if (loading) return <LoadingView />;
@@ -79,11 +100,11 @@ export default function UserProfileScreen() {
         <Text style={styles.settingsText}>{t('profile.settings')}</Text>
       </TouchableOpacity>
 
-      {settings.avatarUri ? (
+      {user && settings.avatarUri ? (
         <Image source={{ uri: settings.avatarUri }} style={styles.avatarImg} contentFit="cover" />
       ) : (
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{displayName.slice(0, 1).toUpperCase()}</Text>
+          <Text style={styles.avatarText}>{shownName.slice(0, 1).toUpperCase()}</Text>
         </View>
       )}
       {user ? (
@@ -96,20 +117,23 @@ export default function UserProfileScreen() {
         </View>
       ) : (
         <View>
-          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.name}>{shownName}</Text>
           <Text style={styles.title}>{t('profile.notLoggedIn')}</Text>
           <View style={styles.authRow}>
-            <TouchableOpacity style={styles.loginBtn} onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginText}>{t('profile.loginGoogle')}</Text>
+            <TouchableOpacity style={styles.loginBtn} onPress={() => void signIn()} disabled={signingIn}>
+              <Text style={styles.loginText}>{signingIn ? t('login.opening') : t('profile.loginGoogle')}</Text>
             </TouchableOpacity>
           </View>
+          {authError ? <Text style={styles.authError}>{authError}</Text> : null}
         </View>
       )}
 
-      <TouchableOpacity style={styles.editBtn} onPress={startEdit}>
-        <Text style={styles.editText}>✎ {t('profile.editProfile')}</Text>
-      </TouchableOpacity>
-      {editing ? (
+      {user ? (
+        <TouchableOpacity style={styles.editBtn} onPress={startEdit}>
+          <Text style={styles.editText}>✎ {t('profile.editProfile')}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {user && editing ? (
         <View style={styles.editBox}>
           <Text style={styles.hint}>{t('profile.displayName')}</Text>
           <TextInput
@@ -208,6 +232,7 @@ function createStyles(c: Palette) {
     loginText: { color: c.onPrimary, fontWeight: '700' },
     logoutBtn: { alignSelf: 'center', marginTop: spacing.md },
     logoutText: { color: c.danger, fontWeight: '600' },
+    authError: { color: c.danger, textAlign: 'center', marginTop: spacing.sm },
     editBtn: { alignSelf: 'center', marginTop: spacing.md },
     editText: { color: c.primaryDark, fontWeight: '600' },
     editBox: {
