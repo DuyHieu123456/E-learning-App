@@ -16,17 +16,21 @@
 //   only — never written over the signed-in store. Signing out drops
 //   back to that clean guest state. (Owner decision 2026-10-30: a
 //   guest must not see, or leave behind, another session's data.)
+// - SYNC: the signed-in partition is mirrored to Supabase
+//   (public.user_state, one JSON row per account): after sign-in the
+//   server copy wins, local changes are pushed up (debounced 1s), so
+//   personal data follows the ACCOUNT across devices. The local
+//   partition stays as the offline cache / fallback.
 // - Screens read via useAppState() and never touch AsyncStorage directly.
 // - Catalog data (courses, teachers...) is NOT here — use api.ts.
 // - The signed-in account is NOT here — use AuthContext (Supabase Auth).
-//   Partitions live on THIS device: the data does not follow the
-//   account to another phone (no server sync — MVP scope).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { initialPersistedState } from '../data/mockData';
 import type { Order, PersistedState, Project, QaComment, QaQuestion, QuizScore, Review } from '../data/types';
+import { fetchRemoteState, pushRemoteState } from '../services/userState';
 import { loadPersistedState, persistedStateKeyFor, savePersistedState } from '../storage/storage';
 import { useAuth } from './AuthContext';
 
@@ -86,18 +90,46 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // Guest: session-only — starts empty, never saved to disk.
   const modeRef = useRef<string>('unknown'); // 'unknown' | 'guest' | userId
   const activeKeyRef = useRef<string | null>(null);
+  // Bumped by every local mutation; the post-sign-in server fetch
+  // compares it to decide whether local or remote state wins.
+  const localVersionRef = useRef(0);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRemotePush = useCallback(() => {
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(() => {
+      void pushRemoteState(stateRef.current);
+    }, 1000);
+  }, []);
 
   useEffect(() => {
     if (initializing) return;
     if (user) {
       if (modeRef.current === user.id) return;
       modeRef.current = user.id;
-      activeKeyRef.current = persistedStateKeyFor(user.id);
+      const key = persistedStateKeyFor(user.id);
+      activeKeyRef.current = key;
       let cancelled = false;
-      loadPersistedState(activeKeyRef.current).then((loaded) => {
+      loadPersistedState(key).then((loaded) => {
         if (cancelled) return;
         setState(loaded);
         setReady(true);
+        // Reconcile with the account's server copy (the account truth
+        // since the 2026-10-30 sync): remote wins when the user has
+        // not changed anything locally yet; if they already did, the
+        // local change wins and is pushed up instead. No server copy
+        // yet -> seed it from this device's partition.
+        const versionAtLoad = localVersionRef.current;
+        void fetchRemoteState().then((remote) => {
+          if (cancelled) return;
+          if (localVersionRef.current !== versionAtLoad) {
+            void pushRemoteState(stateRef.current);
+          } else if (remote) {
+            setState(remote);
+            void savePersistedState(remote, key);
+          } else {
+            void pushRemoteState(loaded);
+          }
+        });
       });
       return () => {
         cancelled = true;
@@ -111,14 +143,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   // Single write path: every mutation goes through here so the in-memory
   // state and AsyncStorage can never drift apart. Guests skip the disk
-  // write entirely — their state dies with the session.
-  const update = useCallback((fn: (prev: PersistedState) => PersistedState) => {
-    setState((prev) => {
-      const next = fn(prev);
-      if (activeKeyRef.current) void savePersistedState(next, activeKeyRef.current);
-      return next;
-    });
-  }, []);
+  // write entirely — their state dies with the session. Signed-in
+  // changes are also pushed (debounced) to the account's Supabase copy.
+  const update = useCallback(
+    (fn: (prev: PersistedState) => PersistedState) => {
+      localVersionRef.current += 1;
+      setState((prev) => {
+        const next = fn(prev);
+        if (activeKeyRef.current) void savePersistedState(next, activeKeyRef.current);
+        return next;
+      });
+      if (activeKeyRef.current) scheduleRemotePush();
+    },
+    [scheduleRemotePush],
+  );
 
   const value = useMemo<AppStateContextValue>(() => {
     const current = stateRef.current;

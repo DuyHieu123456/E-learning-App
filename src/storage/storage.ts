@@ -18,27 +18,34 @@ export function persistedStateKeyFor(userId: string): string {
   return `${STORAGE_KEY}.${userId}`;
 }
 
+// Defensive merge so a stale/partial saved shape (an older app
+// version, or the server copy from user_state) cannot crash screens.
+// Shared by the local loader below and the Supabase sync service.
+export function normalizePersistedState(
+  parsed: Partial<PersistedState> | null | undefined,
+): PersistedState {
+  if (!parsed) return initialPersistedState;
+  return {
+    bookmarkedCourseIds: parsed.bookmarkedCourseIds ?? [],
+    cart: parsed.cart ?? [],
+    progress: parsed.progress ?? [],
+    purchasedCourseIds: parsed.purchasedCourseIds ?? [],
+    followedTeacherIds: parsed.followedTeacherIds ?? [],
+    myReviews: parsed.myReviews ?? [],
+    myProjects: parsed.myProjects ?? [],
+    myQuestions: parsed.myQuestions ?? [],
+    myComments: parsed.myComments ?? {},
+    likedQuestionIds: parsed.likedQuestionIds ?? [],
+    orders: parsed.orders ?? [],
+    quizScores: parsed.quizScores ?? [],
+  };
+}
+
 export async function loadPersistedState(key: string = STORAGE_KEY): Promise<PersistedState> {
   try {
     const raw = await AsyncStorage.getItem(key);
     if (!raw) return initialPersistedState;
-    const parsed = JSON.parse(raw) as PersistedState;
-    // Defensive merge so a stale/partial saved shape cannot crash screens
-    // (older app versions saved fewer fields than the current shape).
-    return {
-      bookmarkedCourseIds: parsed.bookmarkedCourseIds ?? [],
-      cart: parsed.cart ?? [],
-      progress: parsed.progress ?? [],
-      purchasedCourseIds: parsed.purchasedCourseIds ?? [],
-      followedTeacherIds: parsed.followedTeacherIds ?? [],
-      myReviews: parsed.myReviews ?? [],
-      myProjects: parsed.myProjects ?? [],
-      myQuestions: parsed.myQuestions ?? [],
-      myComments: parsed.myComments ?? {},
-      likedQuestionIds: parsed.likedQuestionIds ?? [],
-      orders: parsed.orders ?? [],
-      quizScores: parsed.quizScores ?? [],
-    };
+    return normalizePersistedState(JSON.parse(raw) as PersistedState);
   } catch {
     return initialPersistedState;
   }
