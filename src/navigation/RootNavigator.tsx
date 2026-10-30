@@ -76,7 +76,11 @@ function MainTabs() {
 }
 
 // IMPORTANT: the three entry states use three SEPARATE navigator
-// components on purpose. If RootNavigator returned different
+// components on purpose. The Login route is registered ONLY in
+// GateNavigator — nowhere else — so a second login screen cannot
+// exist anywhere in the app (owner demand 2026-10-30); gated guest
+// actions use the in-place AuthPrompt modal instead.
+// If RootNavigator returned different
 // <Stack.Navigator> configurations from one component, React Navigation
 // keeps the existing navigation state for route names present in both
 // configurations — and "Login" exists in all of them, so leaving the
@@ -85,11 +89,9 @@ function MainTabs() {
 // found 2026-10-30). Distinct components unmount/remount cleanly, so
 // each entry state starts from its own initial route.
 function OnboardingNavigator() {
-  const { t } = useTranslation();
   return (
     <Stack.Navigator>
       <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('login.title') }} />
     </Stack.Navigator>
   );
 }
@@ -115,7 +117,6 @@ function AppNavigator() {
       <Stack.Screen name="SearchResults" component={SearchResultsScreen} options={{ title: t('tabs.search') }} />
       <Stack.Screen name="TeacherProfile" component={TeacherProfileScreen} options={{ title: t('teacher.title') }} />
       <Stack.Screen name="Cart" component={CartScreen} options={{ title: t('cart.title') }} />
-      <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('login.title') }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t('settings.title') }} />
     </Stack.Navigator>
   );
