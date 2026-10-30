@@ -75,30 +75,35 @@ function MainTabs() {
   );
 }
 
-export default function RootNavigator() {
-  const { user, initializing } = useAuth();
-  const settings = useSettings();
+// IMPORTANT: the three entry states use three SEPARATE navigator
+// components on purpose. If RootNavigator returned different
+// <Stack.Navigator> configurations from one component, React Navigation
+// keeps the existing navigation state for route names present in both
+// configurations — and "Login" exists in all of them, so leaving the
+// gate (as guest or right after Google sign-in) kept the user stranded
+// on the main stack's Login screen with nothing to go back to (bug
+// found 2026-10-30). Distinct components unmount/remount cleanly, so
+// each entry state starts from its own initial route.
+function OnboardingNavigator() {
   const { t } = useTranslation();
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('login.title') }} />
+    </Stack.Navigator>
+  );
+}
 
-  if (!settings.ready || initializing) return <LoadingView />;
+function GateNavigator() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+    </Stack.Navigator>
+  );
+}
 
-  if (!settings.hasOnboarded) {
-    return (
-      <Stack.Navigator>
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ title: t('login.title') }} />
-      </Stack.Navigator>
-    );
-  }
-
-  if (!user && !settings.guestSkipped) {
-    return (
-      <Stack.Navigator>
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-      </Stack.Navigator>
-    );
-  }
-
+function AppNavigator() {
+  const { t } = useTranslation();
   return (
     <Stack.Navigator>
       <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
@@ -114,4 +119,14 @@ export default function RootNavigator() {
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t('settings.title') }} />
     </Stack.Navigator>
   );
+}
+
+export default function RootNavigator() {
+  const { user, initializing } = useAuth();
+  const settings = useSettings();
+
+  if (!settings.ready || initializing) return <LoadingView />;
+  if (!settings.hasOnboarded) return <OnboardingNavigator />;
+  if (!user && !settings.guestSkipped) return <GateNavigator />;
+  return <AppNavigator />;
 }

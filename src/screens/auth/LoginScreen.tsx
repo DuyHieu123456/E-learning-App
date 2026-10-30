@@ -28,16 +28,27 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Exit path after a successful sign-in / guest choice. In the full
+  // app this screen was pushed, so go back. If it is somehow the stack
+  // root in the full app, reset to the tabs instead of stranding the
+  // user here. At the entry gate neither applies: RootNavigator swaps
+  // navigators as soon as `user` / `guestSkipped` flips, which lifts
+  // the gate by itself.
+  const leave = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else if (navigation.getState().routeNames.includes('MainTabs')) {
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    }
+  };
+
   const submit = async () => {
     setError(null);
     setSubmitting(true);
     try {
       const signedIn = await signInWithGoogle();
       if (!signedIn) return; // người dùng tự hủy ở màn chọn tài khoản Google
-      // In the full app (opened from Profile) go back; at the entry gate
-      // there is nothing to go back to — the gate lifts by itself once
-      // `user` is set and RootNavigator re-renders.
-      if (navigation.canGoBack()) navigation.goBack();
+      leave();
     } catch (err) {
       setError(err instanceof AuthError ? err.message : t('login.failed'));
     } finally {
@@ -47,7 +58,7 @@ export default function LoginScreen() {
 
   const continueAsGuest = () => {
     skipAsGuest();
-    if (navigation.canGoBack()) navigation.goBack();
+    leave();
   };
 
   return (
