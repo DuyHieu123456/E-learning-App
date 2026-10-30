@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 
 import type { AuthUser } from '../data/types';
-import { getValidSession, signInWithGoogle as signInWithGoogleSvc, signOut as signOutSvc } from '../services/auth';
+import { discardStoredSession, signInWithGoogle as signInWithGoogleSvc, signOut as signOutSvc } from '../services/auth';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -31,13 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    getValidSession()
-      .then((session) => {
-        if (!cancelled) setUser(session?.user ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setUser(null);
-      })
+    // Owner decision 2026-10-30: NO silent auto-login. Every cold start
+    // begins signed-out at the Login gate (sign in with Google, or
+    // continue as guest), so any stored session is discarded here
+    // instead of restored. The session still lives in AsyncStorage
+    // DURING a session (e.g. project upload uses its token).
+    discardStoredSession()
+      .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setInitializing(false);
       });

@@ -7,9 +7,10 @@
 // Q&A questions/comments, likes).
 //
 // How it works:
-// - SIGNED-IN: on sign-in it loads PersistedState from AsyncStorage
-//   (storage.ts), and every action saves the whole state back — so a
-//   signed-in user's data survives closing and reopening the app.
+// - SIGNED-IN: on sign-in it loads that account's own PersistedState
+//   partition from AsyncStorage (one storage key per Google account
+//   id), and every action saves back to the same partition — two
+//   accounts on one phone have fully separate cart/purchases/progress.
 // - GUEST: session-only. A guest always starts from the empty initial
 //   state on every cold start, and guest changes are kept in memory
 //   only — never written over the signed-in store. Signing out drops
@@ -18,14 +19,15 @@
 // - Screens read via useAppState() and never touch AsyncStorage directly.
 // - Catalog data (courses, teachers...) is NOT here — use api.ts.
 // - The signed-in account is NOT here — use AuthContext (Supabase Auth).
-//   Personal state is per-device, not per-account (MVP scope).
+//   Partitions live on THIS device: the data does not follow the
+//   account to another phone (no server sync — MVP scope).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { initialPersistedState } from '../data/mockData';
 import type { Order, PersistedState, Project, QaComment, QaQuestion, QuizScore, Review } from '../data/types';
-import { loadPersistedState, savePersistedState } from '../storage/storage';
+import { loadPersistedState, persistedStateKeyFor, savePersistedState } from '../storage/storage';
 import { useAuth } from './AuthContext';
 
 export interface AppStateContextValue {
@@ -79,17 +81,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const { user, initializing } = useAuth();
-  // 'user': personal state comes from disk and every change is saved
-  // back. 'guest': session-only — starts empty, never saved to disk.
-  const modeRef = useRef<'unknown' | 'user' | 'guest'>('unknown');
+  // Signed-in: personal state comes from the account's own on-device
+  // partition (activeKeyRef) and every change is saved back to it.
+  // Guest: session-only — starts empty, never saved to disk.
+  const modeRef = useRef<string>('unknown'); // 'unknown' | 'guest' | userId
+  const activeKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (initializing) return;
     if (user) {
-      if (modeRef.current === 'user') return;
-      modeRef.current = 'user';
+      if (modeRef.current === user.id) return;
+      modeRef.current = user.id;
+      activeKeyRef.current = persistedStateKeyFor(user.id);
       let cancelled = false;
-      loadPersistedState().then((loaded) => {
+      loadPersistedState(activeKeyRef.current).then((loaded) => {
         if (cancelled) return;
         setState(loaded);
         setReady(true);
@@ -99,6 +104,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       };
     }
     modeRef.current = 'guest';
+    activeKeyRef.current = null;
     setState(initialPersistedState);
     setReady(true);
   }, [user, initializing]);
@@ -109,7 +115,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const update = useCallback((fn: (prev: PersistedState) => PersistedState) => {
     setState((prev) => {
       const next = fn(prev);
-      if (modeRef.current === 'user') void savePersistedState(next);
+      if (activeKeyRef.current) void savePersistedState(next, activeKeyRef.current);
       return next;
     });
   }, []);

@@ -10,9 +10,17 @@ import type { PersistedState } from '../data/types';
 
 const STORAGE_KEY = 'elearning.persistedState.v1';
 
-export async function loadPersistedState(): Promise<PersistedState> {
+// One on-device partition per Google account (owner decision
+// 2026-10-30): two accounts on the same phone must never see each
+// other's cart, purchases or progress. The bare STORAGE_KEY was the
+// pre-partition shared store and is no longer read by the app.
+export function persistedStateKeyFor(userId: string): string {
+  return `${STORAGE_KEY}.${userId}`;
+}
+
+export async function loadPersistedState(key: string = STORAGE_KEY): Promise<PersistedState> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(key);
     if (!raw) return initialPersistedState;
     const parsed = JSON.parse(raw) as PersistedState;
     // Defensive merge so a stale/partial saved shape cannot crash screens
@@ -36,9 +44,9 @@ export async function loadPersistedState(): Promise<PersistedState> {
   }
 }
 
-export async function savePersistedState(state: PersistedState): Promise<void> {
+export async function savePersistedState(state: PersistedState, key: string = STORAGE_KEY): Promise<void> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    await AsyncStorage.setItem(key, JSON.stringify(state));
   } catch {
     // Storage is best-effort in the skeleton; ignore write failures.
   }

@@ -69,7 +69,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (raw) {
           try {
             const parsed = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
-            setSettings(parsed);
+            // guestSkipped is per-SESSION (owner decision 2026-10-30):
+            // every cold start returns to the Login gate, where the user
+            // actively chooses Google sign-in or "continue as guest".
+            setSettings({ ...parsed, guestSkipped: false });
             void i18n.changeLanguage(parsed.language);
           } catch {
             // corrupted settings fall back to defaults

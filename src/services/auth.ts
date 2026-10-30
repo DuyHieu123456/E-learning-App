@@ -4,8 +4,10 @@
 // the first Google sign-in automatically creates the account in Supabase
 // Auth's own auth.users table (managed by Supabase, NOT one of the group's
 // 8 public tables). The session (access + refresh token) is stored in
-// AsyncStorage so the user stays signed in across app restarts; the
-// access token is refreshed automatically when it is about to expire.
+// AsyncStorage for the CURRENT session (e.g. project upload uses its
+// token). It is intentionally NOT restored on the next cold start —
+// the owner wants a login at every app entry (decided 2026-10-30), so
+// AuthContext discards the stored session on launch.
 //
 // Developer setup (one time, see HUONG-DAN-supabase-google.md):
 //   1. Create a Google Cloud OAuth client (Web application) with the
@@ -183,6 +185,13 @@ export async function signOut(): Promise<void> {
       // Server-side logout is best-effort; the local session is cleared anyway.
     }
   }
+  await saveSession(null);
+}
+
+// Cold-start helper: throw away any stored session WITHOUT a network
+// logout call. Used by AuthContext on launch — every app entry starts
+// at the Login gate (owner decision 2026-10-30).
+export async function discardStoredSession(): Promise<void> {
   await saveSession(null);
 }
 
