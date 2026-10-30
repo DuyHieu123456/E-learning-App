@@ -18,25 +18,28 @@ const img = (id: string, w = 800) =>
 
 // Public sample videos used as lecture-video placeholders for the
 // flagship UX course — swap for real lecture URLs in the database
-// (lessons.video_url) when the group produces them. NOTE: the original
-// host (Google's gtv-videos-bucket) started returning 403 AccessDenied
-// on 2026-10-28, so these URLs point to other public sample hosts
-// (MDN, Mux, archive.org, Unified Streaming, Apple) — every URL was
-// verified reachable (HTTP 200/206, video content) on 2026-10-28.
+// (lessons.video_url) when the group produces them. HISTORY: the
+// original host (Google's gtv-videos-bucket) returned 403 from
+// 2026-10-28; round 1 replacements (archive.org & co) were reachable
+// over HTTP but most failed inside the phone's video player — only
+// the MDN mp4 and the Mux HLS lessons played. Round 2 (2026-10-30)
+// keeps those two and moves lessons 3-9 to zero-redirect hosts
+// (W3C media server, Google ExoPlayer/Shaka test assets, JW Player,
+// Mux), each verified with an Android/ExoPlayer user agent + Range.
 const SAMPLE_VIDEOS: Record<string, string> = {
   ForBiggerFun: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
   ForBiggerBlazes: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
   ForBiggerEscapes:
-    'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
+    'https://media.w3.org/2010/05/sintel/trailer.mp4',
   ForBiggerJoyrides:
-    'https://filesamples.com/samples/video/mp4/sample_1280x720_surfing_with_audio.mp4',
-  ForBiggerMeltdowns: 'https://download.samplelib.com/mp4/sample-5s.mp4',
-  BigBuckBunny: 'https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4',
+    'https://media.w3.org/2010/05/bunny/trailer.mp4',
+  ForBiggerMeltdowns: 'https://media.w3.org/2010/05/bunny/movie.mp4',
+  BigBuckBunny: 'https://storage.googleapis.com/exoplayer-test-media-1/mp4/frame-counter-one-hour.mp4',
   ElephantsDream:
-    'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-  Sintel: 'https://archive.org/download/Sintel/sintel-2048-stereo_512kb.mp4',
+    'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8',
+  Sintel: 'https://content.jwplatform.com/manifests/yp34SRmf.m3u8',
   TearsOfSteel:
-    'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8',
+    'https://test-streams.mux.dev/test_001/stream.m3u8',
 };
 const vid = (name: string) => SAMPLE_VIDEOS[name];
 

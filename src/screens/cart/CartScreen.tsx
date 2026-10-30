@@ -17,6 +17,7 @@ import { newLocalId, useAppState } from '../../context/AppStateContext';
 import { useSettings } from '../../context/SettingsContext';
 import { formatPrice, getTeacherById } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
 import type { Palette } from '../../theme/colors';
@@ -32,6 +33,7 @@ export default function CartScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const app = useAppState();
+  const requireAuth = useRequireAuth();
   const [justBought, setJustBought] = useState<string[] | null>(null);
   const [promoInput, setPromoInput] = useState('');
   const [appliedCode, setAppliedCode] = useState<string | undefined>(undefined);
@@ -89,6 +91,7 @@ export default function CartScreen() {
   };
 
   const doCheckout = () => {
+    if (!requireAuth()) return;
     const bought = app.checkout();
     app.addOrder({
       id: newLocalId('ord'),

@@ -25,6 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDisplayName, useSettings } from '../../context/SettingsContext';
 import { getChapters, totalLessons } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import {
   fetchCourseById,
@@ -57,6 +58,7 @@ export default function LearningScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const app = useAppState();
   const { user } = useAuth();
+  const requireAuth = useRequireAuth();
   const author = useDisplayName(user?.name);
   const [tab, setTab] = useState<Tab>('lessons');
 
@@ -109,6 +111,7 @@ export default function LearningScreen() {
   };
 
   const submitProject = async () => {
+    if (!requireAuth()) return;
     if (!projTitle.trim()) return;
     let fileUrl: string | undefined;
     if (projFile) {
@@ -136,6 +139,7 @@ export default function LearningScreen() {
   };
 
   const submitQuestion = () => {
+    if (!requireAuth()) return;
     if (!questionText.trim()) return;
     app.addQuestion({
       id: newLocalId('my-q'),
@@ -149,6 +153,7 @@ export default function LearningScreen() {
   };
 
   const submitComment = (questionId: string) => {
+    if (!requireAuth()) return;
     if (!commentText.trim()) return;
     app.addComment(questionId, { author, text: commentText.trim() });
     setCommentText('');
@@ -185,11 +190,14 @@ export default function LearningScreen() {
                   <TouchableOpacity
                     key={lesson.id}
                     style={styles.lessonRow}
-                    onPress={() =>
-                      lesson.videoUrl
-                        ? navigation.navigate('LessonPlayer', { courseId: course.id, lessonId: lesson.id })
-                        : app.toggleLessonComplete(course.id, lesson.id)
-                    }
+                    onPress={() => {
+                      if (!requireAuth()) return;
+                      if (lesson.videoUrl) {
+                        navigation.navigate('LessonPlayer', { courseId: course.id, lessonId: lesson.id });
+                      } else {
+                        app.toggleLessonComplete(course.id, lesson.id);
+                      }
+                    }}
                   >
                     <Text style={styles.lessonNo}>{String(idx + 1).padStart(2, '0')}</Text>
                     <View style={{ flex: 1 }}>
@@ -227,7 +235,7 @@ export default function LearningScreen() {
                   {t('learn.quizLast', { correct: lastScore.correct, total: lastScore.total })}
                 </Text>
               ) : null}
-              <TouchableOpacity style={styles.submitBtn} onPress={() => navigation.navigate('Quiz', { courseId: course.id })}>
+              <TouchableOpacity style={styles.submitBtn} onPress={() => { if (requireAuth()) navigation.navigate('Quiz', { courseId: course.id }); }}>
                 <Text style={styles.submitText}>{t('learn.quizStart', { count: quiz.length })}</Text>
               </TouchableOpacity>
             </View>
@@ -365,7 +373,7 @@ export default function LearningScreen() {
                   </View>
                   <Text style={styles.body}>{q.text}</Text>
                   <View style={styles.qaActions}>
-                    <TouchableOpacity onPress={() => app.toggleLike(q.id)}>
+                    <TouchableOpacity onPress={() => { if (requireAuth()) app.toggleLike(q.id); }}>
                       <Text style={[styles.qaAction, liked && styles.qaActionActive]}>♥ {q.likes}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity

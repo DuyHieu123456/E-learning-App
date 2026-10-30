@@ -15,6 +15,7 @@ import { ErrorView, LoadingView } from '../../components/DataState';
 import { useAppState } from '../../context/AppStateContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourseById } from '../../services/api';
 import type { Palette } from '../../theme/colors';
@@ -31,6 +32,7 @@ export default function LessonPlayerScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const app = useAppState();
+  const requireAuth = useRequireAuth();
 
   const { data: course, loading, error, retry } = useAsyncData(() => fetchCourseById(courseId), [courseId]);
   const lesson = course?.chapters.flatMap((ch) => ch.lessons).find((l) => l.id === lessonId);
@@ -75,7 +77,7 @@ export default function LessonPlayerScreen() {
       </Text>
       <TouchableOpacity
         style={[styles.completeBtn, completed && styles.completeBtnDone]}
-        onPress={() => app.toggleLessonComplete(courseId, lessonId)}
+        onPress={() => { if (requireAuth()) app.toggleLessonComplete(courseId, lessonId); }}
       >
         <Text style={styles.completeText}>
           {completed ? `✓ ${t('player.completed')}` : t('player.markComplete')}

@@ -27,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDisplayName, useSettings } from '../../context/SettingsContext';
 import { discountPercent, formatPrice, getChapters } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourseById, fetchReviewsForCourse, fetchTeacherById } from '../../services/api';
 import type { Palette } from '../../theme/colors';
@@ -52,6 +53,7 @@ export default function CourseDetailsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const app = useAppState();
   const { user } = useAuth();
+  const requireAuth = useRequireAuth();
   const author = useDisplayName(user?.name);
   const [tab, setTab] = useState<Tab>('overview');
   const [myRating, setMyRating] = useState(5);
@@ -88,6 +90,7 @@ export default function CourseDetailsScreen() {
   const inCart = app.isInCart(course.id);
 
   const submitReview = () => {
+    if (!requireAuth()) return;
     const text = myComment.trim();
     if (!text) return;
     if (editingId) {
@@ -135,7 +138,7 @@ export default function CourseDetailsScreen() {
 
       <View style={styles.titleRow}>
         <Text style={[styles.title, { flex: 1 }]}>{course.title}</Text>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => app.toggleBookmark(course.id)}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => { if (requireAuth()) app.toggleBookmark(course.id); }}>
           <Ionicons
             name={bookmarked ? 'bookmark' : 'bookmark-outline'}
             size={24}
@@ -324,7 +327,7 @@ export default function CourseDetailsScreen() {
             <Text style={styles.addText}>{t('details.inCart')}</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.addBtn} onPress={() => app.addToCart(course.id)}>
+          <TouchableOpacity style={styles.addBtn} onPress={() => { if (requireAuth()) app.addToCart(course.id); }}>
             <Text style={styles.addText}>{t('details.addToCart')}</Text>
           </TouchableOpacity>
         )}

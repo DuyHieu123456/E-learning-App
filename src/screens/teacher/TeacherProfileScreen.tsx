@@ -15,6 +15,7 @@ import SectionHeader from '../../components/SectionHeader';
 import { useAppState } from '../../context/AppStateContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses, fetchTeacherById } from '../../services/api';
 import type { Palette } from '../../theme/colors';
@@ -31,6 +32,7 @@ export default function TeacherProfileScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const app = useAppState();
+  const requireAuth = useRequireAuth();
   const [avatarError, setAvatarError] = useState(false);
   const { data, loading, error, retry } = useAsyncData(async () => {
     const found = await fetchTeacherById(route.params.teacherId);
@@ -75,7 +77,7 @@ export default function TeacherProfileScreen() {
       </Text>
       <TouchableOpacity
         style={[styles.followBtn, following && styles.followBtnActive]}
-        onPress={() => app.toggleFollow(teacher.id)}
+        onPress={() => { if (requireAuth()) app.toggleFollow(teacher.id); }}
       >
         <Text style={[styles.followText, following && styles.followTextActive]}>
           {following ? `✓ ${t('teacher.following')}` : `+ ${t('teacher.follow')}`}
