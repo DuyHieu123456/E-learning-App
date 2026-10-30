@@ -90,7 +90,7 @@ export default function UserProfileScreen() {
         <View>
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.title}>{user.email}</Text>
-          <TouchableOpacity style={styles.logoutBtn} onPress={() => void signOut()}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => { settings.resetGuestSkip(); void signOut(); }}>
             <Text style={styles.logoutText}>{t('profile.logout')}</Text>
           </TouchableOpacity>
         </View>

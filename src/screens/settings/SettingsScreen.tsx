@@ -54,7 +54,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <Text style={styles.name}>{user.name}</Text>
           <Text style={styles.hint}>{user.email}</Text>
-          <TouchableOpacity style={styles.logoutBtn} onPress={() => void signOut()}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => { settings.resetGuestSkip(); void signOut(); }}>
             <Text style={[styles.logoutText, { color: c.danger }]}>{t('settings.logout')}</Text>
           </TouchableOpacity>
         </View>

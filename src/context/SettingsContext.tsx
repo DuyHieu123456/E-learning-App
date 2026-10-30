@@ -49,6 +49,7 @@ export interface SettingsContextValue {
   completeOnboarding: () => void;
   guestSkipped: boolean;
   skipAsGuest: () => void;
+  resetGuestSkip: () => void;
   displayName: string;
   avatarUri: string;
   setProfile: (displayName: string, avatarUri: string) => void;
@@ -105,6 +106,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       completeOnboarding: () => update({ hasOnboarded: true }),
       guestSkipped: settings.guestSkipped,
       skipAsGuest: () => update({ guestSkipped: true }),
+      resetGuestSkip: () => update({ guestSkipped: false }),
       displayName: settings.displayName,
       avatarUri: settings.avatarUri,
       setProfile: (displayName, avatarUri) => update({ displayName, avatarUri }),

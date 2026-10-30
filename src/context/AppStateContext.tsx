@@ -7,14 +7,18 @@
 // Q&A questions/comments, likes).
 //
 // How it works:
-// - On mount it loads PersistedState from AsyncStorage (storage.ts).
-// - Every action returns a NEW state object, updates React state, and
-//   saves the whole state back to AsyncStorage — so anything the user
-//   does survives closing and reopening the app.
+// - SIGNED-IN: on sign-in it loads PersistedState from AsyncStorage
+//   (storage.ts), and every action saves the whole state back — so a
+//   signed-in user's data survives closing and reopening the app.
+// - GUEST: session-only. A guest always starts from the empty initial
+//   state on every cold start, and guest changes are kept in memory
+//   only — never written over the signed-in store. Signing out drops
+//   back to that clean guest state. (Owner decision 2026-10-30: a
+//   guest must not see, or leave behind, another session's data.)
 // - Screens read via useAppState() and never touch AsyncStorage directly.
 // - Catalog data (courses, teachers...) is NOT here — use api.ts.
 // - The signed-in account is NOT here — use AuthContext (Supabase Auth).
-//   Personal state is per-device; signing in does not move it (MVP scope).
+//   Personal state is per-device, not per-account (MVP scope).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -22,6 +26,7 @@ import type { ReactNode } from 'react';
 import { initialPersistedState } from '../data/mockData';
 import type { Order, PersistedState, Project, QaComment, QaQuestion, QuizScore, Review } from '../data/types';
 import { loadPersistedState, savePersistedState } from '../storage/storage';
+import { useAuth } from './AuthContext';
 
 export interface AppStateContextValue {
   state: PersistedState;
@@ -73,25 +78,38 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const { user, initializing } = useAuth();
+  // 'user': personal state comes from disk and every change is saved
+  // back. 'guest': session-only — starts empty, never saved to disk.
+  const modeRef = useRef<'unknown' | 'user' | 'guest'>('unknown');
 
   useEffect(() => {
-    let cancelled = false;
-    loadPersistedState().then((loaded) => {
-      if (cancelled) return;
-      setState(loaded);
-      setReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (initializing) return;
+    if (user) {
+      if (modeRef.current === 'user') return;
+      modeRef.current = 'user';
+      let cancelled = false;
+      loadPersistedState().then((loaded) => {
+        if (cancelled) return;
+        setState(loaded);
+        setReady(true);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    modeRef.current = 'guest';
+    setState(initialPersistedState);
+    setReady(true);
+  }, [user, initializing]);
 
   // Single write path: every mutation goes through here so the in-memory
-  // state and AsyncStorage can never drift apart.
+  // state and AsyncStorage can never drift apart. Guests skip the disk
+  // write entirely — their state dies with the session.
   const update = useCallback((fn: (prev: PersistedState) => PersistedState) => {
     setState((prev) => {
       const next = fn(prev);
-      void savePersistedState(next);
+      if (modeRef.current === 'user') void savePersistedState(next);
       return next;
     });
   }, []);
