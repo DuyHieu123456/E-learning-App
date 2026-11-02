@@ -23,22 +23,28 @@ export interface OAuthTokens {
 
 function parseParams(url: string): Map<string, string> {
   const params = new Map<string, string>();
+  const collect = (raw: string) => {
+    for (const pair of raw.split('&')) {
+      if (!pair) continue;
+      const eq = pair.indexOf('=');
+      if (eq < 0) continue;
+      const key = pair.slice(0, eq);
+      const value = pair.slice(eq + 1);
+      try {
+        params.set(key, decodeURIComponent(value.replace(/\+/g, ' ')));
+      } catch {
+        params.set(key, value);
+      }
+    }
+  };
+  // Merge BOTH the query string and the fragment: the implicit flow puts
+  // the tokens in the fragment, but some browsers / redirect hops move or
+  // duplicate parameters into the query — taking only one side can lose
+  // the session on exactly the phones where the handoff is fragile.
   const hashIdx = url.indexOf('#');
   const queryIdx = url.indexOf('?');
-  const raw =
-    hashIdx >= 0 ? url.slice(hashIdx + 1) : queryIdx >= 0 ? url.slice(queryIdx + 1) : '';
-  for (const pair of raw.split('&')) {
-    if (!pair) continue;
-    const eq = pair.indexOf('=');
-    if (eq < 0) continue;
-    const key = pair.slice(0, eq);
-    const value = pair.slice(eq + 1);
-    try {
-      params.set(key, decodeURIComponent(value.replace(/\+/g, ' ')));
-    } catch {
-      params.set(key, value);
-    }
-  }
+  if (queryIdx >= 0) collect(url.slice(queryIdx + 1, hashIdx > queryIdx ? hashIdx : undefined));
+  if (hashIdx >= 0) collect(url.slice(hashIdx + 1));
   return params;
 }
 

@@ -146,6 +146,66 @@ function mapError(json: unknown): AuthError {
 // Public API
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Deep-link completion (phone sign-in fix, 2026-11-02)
+// ---------------------------------------------------------------------------
+// On Android, WebBrowser.openAuthSessionAsync is only a polyfill over a
+// Chrome Custom Tab + AppState + Linking (Expo docs): its promise resolves
+// solely from the browser handing the exp:// redirect back to the app.
+// On many phones that handoff never lands — after the account picker the
+// tab sits loading forever — or Expo Go restarts the JS from the deep
+// link, which destroys the pending promise. The sign-in therefore also
+// completes from the raw deep-link URL wherever it arrives: the browser
+// result, a Linking 'url' event, or the app's initial URL after a
+// restart. All paths funnel into completeSignInFromUrl, deduplicated so
+// the same callback URL is only ever processed once.
+const AUTH_CALLBACK_MARKER = 'auth-callback';
+const AUTH_BROWSER_TIMEOUT_MS = 120000;
+
+export function isAuthCallbackUrl(url: string | null | undefined): boolean {
+  return !!url && url.includes(AUTH_CALLBACK_MARKER);
+}
+
+let lastHandledCallbackUrl: string | null = null;
+let inflightCallback: { url: string; promise: Promise<AuthSession | null> } | null = null;
+
+// Turns an OAuth callback URL into a stored session. Returns null when
+// the URL carries no usable tokens; throws AuthError when Google /
+// Supabase reported an error on the redirect.
+export function completeSignInFromUrl(url: string): Promise<AuthSession | null> {
+  if (!isAuthCallbackUrl(url)) return Promise.resolve(null);
+  if (inflightCallback && inflightCallback.url === url) return inflightCallback.promise;
+  if (url === lastHandledCallbackUrl) return Promise.resolve(null);
+  const promise = (async (): Promise<AuthSession | null> => {
+    const oauthError = oauthRedirectError(url);
+    if (oauthError) {
+      throw new AuthError('oauth_failed', `Đăng nhập Google thất bại: ${oauthError}`);
+    }
+    const tokens = parseOAuthRedirect(url);
+    if (!tokens) return null;
+    const user = await authGetUser(tokens.accessToken);
+    const session: AuthSession = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: Date.now() + tokens.expiresIn * 1000,
+      user,
+    };
+    await saveSession(session);
+    return session;
+  })();
+  inflightCallback = { url, promise };
+  promise.then(
+    () => {
+      lastHandledCallbackUrl = url;
+      if (inflightCallback && inflightCallback.url === url) inflightCallback = null;
+    },
+    () => {
+      if (inflightCallback && inflightCallback.url === url) inflightCallback = null;
+    },
+  );
+  return promise;
+}
+
 // Opens Google's account picker in a browser session and completes the
 // Supabase OAuth flow. Returns the new session, or null when the user
 // cancelled/closed the browser (not an error — the app stays a guest).
@@ -155,25 +215,40 @@ export async function signInWithGoogle(): Promise<AuthSession | null> {
   ensureConfigured();
   const redirectTo = Linking.createURL('auth-callback');
   const authorizeUrl = buildGoogleAuthorizeUrl(SUPABASE_URL, redirectTo);
-  const result = await WebBrowser.openAuthSessionAsync(authorizeUrl, redirectTo);
-  if (result.type !== 'success') return null;
-  const oauthError = oauthRedirectError(result.url);
-  if (oauthError) {
-    throw new AuthError('oauth_failed', `Đăng nhập Google thất bại: ${oauthError}`);
+  // Bind the Custom Tabs service up front (Android): a cold tab is one
+  // of the ways the post-picker redirect stalls on the loading page.
+  WebBrowser.warmUpAsync().catch(() => undefined);
+
+  const sessionFromBrowser = WebBrowser.openAuthSessionAsync(authorizeUrl, redirectTo).then(
+    (result) => {
+      if (result.type !== 'success') return null;
+      return completeSignInFromUrl(result.url);
+    },
+  );
+
+  // Race the browser session against the raw deep-link event: whichever
+  // delivers the callback URL first completes the sign-in. A generous
+  // timeout keeps the promise from pending forever if neither arrives.
+  let resolveDeepLink: ((session: AuthSession | null) => void) | null = null;
+  const sessionFromDeepLink = new Promise<AuthSession | null>((resolve) => {
+    resolveDeepLink = resolve;
+  });
+  const timer = setTimeout(() => resolveDeepLink?.(null), AUTH_BROWSER_TIMEOUT_MS);
+  const subscription = Linking.addEventListener('url', ({ url }) => {
+    if (!isAuthCallbackUrl(url)) return;
+    clearTimeout(timer);
+    completeSignInFromUrl(url).then(
+      (session) => resolveDeepLink?.(session),
+      () => resolveDeepLink?.(null),
+    );
+  });
+
+  try {
+    return await Promise.race([sessionFromBrowser, sessionFromDeepLink]);
+  } finally {
+    clearTimeout(timer);
+    subscription.remove();
   }
-  const tokens = parseOAuthRedirect(result.url);
-  if (!tokens) {
-    throw new AuthError('oauth_failed', 'Không nhận được phiên đăng nhập từ Google. Thử lại.');
-  }
-  const user = await authGetUser(tokens.accessToken);
-  const session: AuthSession = {
-    accessToken: tokens.accessToken,
-    refreshToken: tokens.refreshToken,
-    expiresAt: Date.now() + tokens.expiresIn * 1000,
-    user,
-  };
-  await saveSession(session);
-  return session;
 }
 
 export async function signOut(): Promise<void> {
