@@ -22,7 +22,13 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
 import type { AuthSession, AuthUser } from '../data/types';
-import { buildGoogleAuthorizeUrl, oauthRedirectError, parseOAuthRedirect } from './oauthRedirect';
+import {
+  buildGoogleAuthorizeUrlPkce,
+  oauthRedirectError,
+  parseOAuthCode,
+  parseOAuthRedirect,
+} from './oauthRedirect';
+import { createCodeChallenge, createCodeVerifier } from './pkce';
 import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabaseConfig';
 
 // Completes a pending browser auth session on web / when the app is
@@ -30,6 +36,7 @@ import { isSupabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabas
 WebBrowser.maybeCompleteAuthSession();
 
 const SESSION_KEY = 'elearning.authSession.v1';
+const PKCE_VERIFIER_KEY = 'elearning.pkceVerifier.v1';
 const TIMEOUT_MS = 10000;
 
 export class AuthError extends Error {
@@ -182,16 +189,39 @@ export function completeSignInFromUrl(url: string): Promise<AuthSession | null> 
       throw new AuthError('oauth_failed', `Đăng nhập Google thất bại: ${oauthError}`);
     }
     const tokens = parseOAuthRedirect(url);
-    if (!tokens) return null;
-    const user = await authGetUser(tokens.accessToken);
-    const session: AuthSession = {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: Date.now() + tokens.expiresIn * 1000,
-      user,
-    };
-    await saveSession(session);
-    return session;
+    if (tokens) {
+      const user = await authGetUser(tokens.accessToken);
+      const session: AuthSession = {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: Date.now() + tokens.expiresIn * 1000,
+        user,
+      };
+      await saveSession(session);
+      return session;
+    }
+    // PKCE flow: the redirect carries ?code= instead of tokens. Exchange
+    // it with the verifier saved when the flow started — it lives in
+    // AsyncStorage, so the exchange still works when Expo Go restarted
+    // the JS between opening the browser and the callback arriving.
+    const code = parseOAuthCode(url);
+    if (code) {
+      const verifier = await AsyncStorage.getItem(PKCE_VERIFIER_KEY).catch(() => null);
+      if (!verifier) {
+        throw new AuthError(
+          'oauth_failed',
+          'Không tìm thấy mã xác thực của lần đăng nhập này. Thử đăng nhập lại.',
+        );
+      }
+      const json = (await authRequest('/token?grant_type=pkce', {
+        auth_code: code,
+        code_verifier: verifier,
+      })) as TokenResponse;
+      const session = toSession(json);
+      await saveSession(session);
+      return session;
+    }
+    return null;
   })();
   inflightCallback = { url, promise };
   promise.then(
@@ -214,7 +244,18 @@ export function completeSignInFromUrl(url: string): Promise<AuthSession | null> 
 export async function signInWithGoogle(): Promise<AuthSession | null> {
   ensureConfigured();
   const redirectTo = Linking.createURL('auth-callback');
-  const authorizeUrl = buildGoogleAuthorizeUrl(SUPABASE_URL, redirectTo);
+  // PKCE (2026-11-02): the redirect returns ?code= in the query string,
+  // which survives the Android/Expo Go deep-link handoff — the implicit
+  // flow's #access_token fragment did not, which is why phone sign-in
+  // hung after the account picker. The verifier is kept in AsyncStorage
+  // so the exchange works even if the JS restarted mid-flow.
+  const verifier = createCodeVerifier();
+  await AsyncStorage.setItem(PKCE_VERIFIER_KEY, verifier).catch(() => undefined);
+  const authorizeUrl = buildGoogleAuthorizeUrlPkce(
+    SUPABASE_URL,
+    redirectTo,
+    createCodeChallenge(verifier),
+  );
   // Bind the Custom Tabs service up front (Android): a cold tab is one
   // of the ways the post-picker redirect stalls on the loading page.
   WebBrowser.warmUpAsync().catch(() => undefined);

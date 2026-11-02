@@ -15,6 +15,29 @@ export function buildGoogleAuthorizeUrl(supabaseUrl: string, redirectTo: string)
   return `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=select_account`;
 }
 
+// PKCE variant (2026-11-02): sending a code_challenge switches Supabase
+// to the PKCE flow — the redirect back carries ?code= (query string)
+// instead of #access_token=... (fragment). Query strings survive the
+// Android/Expo Go deep-link handoff; fragments demonstrably do not.
+export function buildGoogleAuthorizeUrlPkce(
+  supabaseUrl: string,
+  redirectTo: string,
+  codeChallenge: string,
+): string {
+  return (
+    `${supabaseUrl}/auth/v1/authorize?provider=google` +
+    `&redirect_to=${encodeURIComponent(redirectTo)}` +
+    `&prompt=select_account` +
+    `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+    `&code_challenge_method=s256`
+  );
+}
+
+// Returns the PKCE authorization code from a redirect URL, or null.
+export function parseOAuthCode(url: string): string | null {
+  return parseParams(url).get('code') ?? null;
+}
+
 export interface OAuthTokens {
   accessToken: string;
   refreshToken: string;
