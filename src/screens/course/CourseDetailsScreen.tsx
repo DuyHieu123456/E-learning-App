@@ -308,6 +308,16 @@ export default function CourseDetailsScreen() {
         </View>
       )}
 
+      <TouchableOpacity
+        style={styles.aiBtn}
+        onPress={() => {
+          if (requireAuth()) navigation.navigate('AiChat', { courseId: course.id });
+        }}
+      >
+        <Ionicons name="sparkles-outline" size={20} color={colors.primaryDark} />
+        <Text style={styles.aiBtnText}>{t('details.askAi')}</Text>
+      </TouchableOpacity>
+
       <View style={styles.footer}>
         <View>
           <Text style={styles.price}>{formatPrice(course.price)}</Text>
@@ -424,11 +434,23 @@ function createStyles(c: Palette) {
     },
     submitBtnDisabled: { opacity: 0.4 },
     submitText: { color: c.onPrimary, fontWeight: '700' },
+    aiBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: c.primary,
+      borderRadius: radius.sm,
+      paddingVertical: spacing.md,
+      marginTop: spacing.xl,
+    },
+    aiBtnText: { color: c.primaryDark, fontWeight: '700' },
     footer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginTop: spacing.xl,
+      marginTop: spacing.lg,
       paddingTop: spacing.lg,
       borderTopWidth: 1,
       borderTopColor: c.border,

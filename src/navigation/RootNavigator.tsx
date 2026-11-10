@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { LoadingView } from '../components/DataState';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import AiChatScreen from '../screens/ai/AiChatScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import CartScreen from '../screens/cart/CartScreen';
 import CertificateScreen from '../screens/course/CertificateScreen';
@@ -116,6 +117,7 @@ function AppNavigator() {
       <Stack.Screen name="Certificate" component={CertificateScreen} options={{ title: t('certificate.title') }} />
       <Stack.Screen name="SearchResults" component={SearchResultsScreen} options={{ title: t('tabs.search') }} />
       <Stack.Screen name="TeacherProfile" component={TeacherProfileScreen} options={{ title: t('teacher.title') }} />
+      <Stack.Screen name="AiChat" component={AiChatScreen} options={{ title: t('ai.title') }} />
       <Stack.Screen name="Cart" component={CartScreen} options={{ title: t('cart.title') }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t('settings.title') }} />
     </Stack.Navigator>

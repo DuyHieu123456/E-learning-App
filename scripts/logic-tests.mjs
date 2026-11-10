@@ -15,7 +15,10 @@ import { fileURLToPath } from 'node:url';
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = mkdtempSync(path.join(tmpdir(), 'elearn-logic-tests-'));
 
-const inputs = [path.join(root, 'src/utils/logic.ts')];
+const inputs = [
+  path.join(root, 'src/utils/logic.ts'),
+  path.join(root, 'scripts/logic-tests-globals.d.ts'),
+];
 const aiPath = path.join(root, 'src/services/ai.ts');
 const hasAi = existsSync(aiPath);
 if (hasAi) inputs.push(aiPath);
@@ -162,7 +165,7 @@ if (hasAi) {
   eq('parser rejects empty array', ai.parsePracticeQuiz('[]', 'c1'), null);
 
   if (!process.env.EXPO_PUBLIC_GEMINI_API_KEY) {
-    const res = await ai.askAi([], 'Xin chào');
+    const res = await ai.askAi([], 'Xin chào', []);
     check('missing key returns ok:false (no network)', res.ok === false);
     check('missing key error is the config message', !res.ok && res.error.includes('API key'));
   }

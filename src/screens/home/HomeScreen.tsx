@@ -20,6 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDisplayName, useSettings } from '../../context/SettingsContext';
 import { discountPercent, totalLessons } from '../../data/mockData';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories, fetchCourses, fetchTeachers } from '../../services/api';
 import type { Palette } from '../../theme/colors';
@@ -37,6 +38,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const displayName = useDisplayName(user?.name);
   const app = useAppState();
+  const requireAuth = useRequireAuth();
   const [refreshing, setRefreshing] = useState(false);
   const { data, loading, error, retry } = useAsyncData(async () => {
     const [categories, courses, teachers] = await Promise.all([
@@ -105,6 +107,20 @@ export default function HomeScreen() {
               <Text style={styles.bannerOff}>{t('home.off', { pct: discountPercent(bannerCourse) })}</Text>
             </TouchableOpacity>
           ) : null}
+
+          <TouchableOpacity
+            style={styles.aiCard}
+            onPress={() => {
+              if (requireAuth()) navigation.navigate('AiChat', {});
+            }}
+          >
+            <Ionicons name="sparkles" size={26} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aiTitle}>{t('home.aiTitle')}</Text>
+              <Text style={styles.hint}>{t('home.aiSub')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
 
           {continuing.length > 0 ? (
             <View>
@@ -221,6 +237,18 @@ function createStyles(c: Palette) {
     },
     bannerTitle: { color: '#fff', fontSize: 13, fontWeight: '600' },
     bannerOff: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: spacing.xs },
+    aiCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.primary,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      marginTop: spacing.md,
+    },
+    aiTitle: { fontWeight: '700', color: c.text },
     continueCard: {
       flexDirection: 'row',
       alignItems: 'center',

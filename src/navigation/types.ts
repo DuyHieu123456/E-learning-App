@@ -15,6 +15,7 @@ export type RootStackParamList = {
   Certificate: { courseId: string };
   SearchResults: { query?: string; categoryId?: string };
   TeacherProfile: { teacherId: string };
+  AiChat: { courseId?: string; lessonId?: string };
   Cart: undefined;
   Login: undefined;
   Settings: undefined;

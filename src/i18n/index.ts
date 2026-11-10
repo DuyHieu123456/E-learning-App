@@ -30,6 +30,8 @@ const vi = {
     topTeachers: 'Giáo viên nổi bật',
     continueLearning: 'Học tiếp',
     off: 'GIẢM {{pct}}%',
+    aiTitle: 'Trợ lý học tập AI',
+    aiSub: 'Hỏi đáp kiến thức, gợi ý khóa học, giải thích bài học',
   },
   search: {
     placeholder: 'Tìm khóa học',
@@ -76,6 +78,7 @@ const vi = {
     addToCart: 'Thêm vào giỏ',
     inCart: 'Đã trong giỏ — Xem giỏ',
     goLearn: 'Vào học ngay',
+    askAi: 'Hỏi AI về khóa này',
     discount: 'Giảm {{pct}}%',
     shareText: 'Khóa học “{{title}}” — {{price}} trên E-Learning App. Học ngay!',
     notFound: 'Không tìm thấy khóa học.',
@@ -133,6 +136,12 @@ const vi = {
     quizLast: 'Lần gần nhất: đúng {{correct}}/{{total}}',
     noQuiz: 'Khóa học này chưa có bài kiểm tra.',
     certBtn: 'Xem chứng nhận hoàn thành',
+    aiTitle: 'Học cùng AI',
+    explainAi: 'Giải thích bằng AI',
+    practiceAi: 'Tạo câu hỏi ôn tập bằng AI',
+    practiceNote: 'Câu hỏi do AI tạo chỉ để ôn tập — không tính vào điểm bài kiểm tra cuối khóa và không được lưu lại.',
+    practiceLoading: 'Đang tạo câu hỏi…',
+    practiceRegen: 'Tạo bộ câu hỏi khác',
   },
   quiz: {
     title: 'Kiểm tra cuối khóa',
@@ -239,6 +248,18 @@ const vi = {
     signIn: 'Đăng nhập bằng Google',
     later: 'Để sau',
   },
+  ai: {
+    title: 'Trợ lý AI',
+    placeholder: 'Nhập câu hỏi của bạn…',
+    thinking: 'Đang trả lời…',
+    empty: 'Xin chào! Mình là trợ lý học tập AI. Hỏi mình về kiến thức, nhờ giải thích bài học hoặc gợi ý khóa học phù hợp nhé.',
+    chipBeginner: 'Gợi ý khóa học cho người mới bắt đầu',
+    chipMobile: 'Tôi nên học gì để làm app mobile?',
+    chipSummary: 'Tóm tắt lợi ích của khóa học này',
+    notConfigured: 'Trợ lý AI chưa được cấu hình API key (file .env) — gửi tin nhắn sẽ nhận được hướng dẫn cấu hình.',
+    contextLesson: 'Đang hỏi về bài: {{title}}',
+    contextCourse: 'Đang hỏi về khóa: {{title}}',
+  },
 };
 
 const en: typeof vi = {
@@ -263,6 +284,8 @@ const en: typeof vi = {
     topTeachers: 'Top teachers',
     continueLearning: 'Continue learning',
     off: '{{pct}}% OFF',
+    aiTitle: 'AI study assistant',
+    aiSub: 'Ask questions, get course recommendations, lesson explanations',
   },
   search: {
     placeholder: 'Search course',
@@ -309,6 +332,7 @@ const en: typeof vi = {
     addToCart: 'Add to cart',
     inCart: 'In cart — View cart',
     goLearn: 'Start learning',
+    askAi: 'Ask AI about this course',
     discount: '{{pct}}% off',
     shareText: 'Course “{{title}}” — {{price}} on the E-Learning App. Start learning!',
     notFound: 'Course not found.',
@@ -366,6 +390,12 @@ const en: typeof vi = {
     quizLast: 'Last attempt: {{correct}}/{{total}} correct',
     noQuiz: 'This course has no quiz yet.',
     certBtn: 'View completion certificate',
+    aiTitle: 'Learn with AI',
+    explainAi: 'Explain with AI',
+    practiceAi: 'Generate AI practice questions',
+    practiceNote: 'AI-generated questions are for practice only — they do not count toward the final quiz score and are not saved.',
+    practiceLoading: 'Generating questions…',
+    practiceRegen: 'Generate a different set',
   },
   quiz: {
     title: 'Final quiz',
@@ -471,6 +501,18 @@ const en: typeof vi = {
     body: 'This feature is for signed-in users. Guests can still browse courses, search and view teacher pages.',
     signIn: 'Sign in with Google',
     later: 'Later',
+  },
+  ai: {
+    title: 'AI assistant',
+    placeholder: 'Type your question…',
+    thinking: 'Answering…',
+    empty: 'Hi! I am your AI study assistant. Ask me about course topics, lesson explanations or course recommendations.',
+    chipBeginner: 'Recommend courses for a beginner',
+    chipMobile: 'What should I learn to build mobile apps?',
+    chipSummary: 'Summarize the benefits of this course',
+    notConfigured: 'The AI assistant has no API key configured (.env) — sending a message returns the setup instructions.',
+    contextLesson: 'Asking about lesson: {{title}}',
+    contextCourse: 'Asking about course: {{title}}',
   },
 };
 

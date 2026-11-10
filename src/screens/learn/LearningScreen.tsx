@@ -152,6 +152,26 @@ export default function LearningScreen() {
     setQuestionText('');
   };
 
+  // "Giải thích bằng AI": open the AI assistant with this course and
+  // its current (first unfinished) lesson as the chat context.
+  const explainWithAi = () => {
+    if (!requireAuth()) return;
+    let targetId: string | undefined;
+    for (const ch of getChapters(course)) {
+      for (const l of ch.lessons) {
+        if (lessonStatus.get(l.id) === 'current') {
+          targetId = l.id;
+          break;
+        }
+      }
+      if (targetId) break;
+    }
+    navigation.navigate('AiChat', {
+      courseId: course.id,
+      ...(targetId ? { lessonId: targetId } : {}),
+    });
+  };
+
   const submitComment = (questionId: string) => {
     if (!requireAuth()) return;
     if (!commentText.trim()) return;
@@ -251,6 +271,12 @@ export default function LearningScreen() {
               <Text style={styles.submitText}>{t('learn.certBtn')}</Text>
             </TouchableOpacity>
           ) : null}
+
+          <Text style={styles.sectionTitle}>{t('learn.aiTitle')}</Text>
+          <TouchableOpacity style={styles.aiBtn} onPress={explainWithAi}>
+            <Ionicons name="sparkles-outline" size={18} color={colors.primaryDark} />
+            <Text style={styles.aiBtnText}>{t('learn.explainAi')}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -480,6 +506,18 @@ function createStyles(c: Palette) {
       marginTop: spacing.xs,
     },
     certBtn: { backgroundColor: c.banner },
+    aiBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: c.primary,
+      borderRadius: radius.sm,
+      paddingVertical: spacing.md,
+      marginTop: spacing.xs,
+    },
+    aiBtnText: { color: c.primaryDark, fontWeight: '700' },
     submitBtnDisabled: { opacity: 0.4 },
     submitText: { color: c.onPrimary, fontWeight: '700' },
     warn: { color: c.danger, marginTop: spacing.sm },
