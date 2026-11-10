@@ -23,6 +23,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorView, LoadingView } from '../../components/DataState';
 import MarkdownText from '../../components/MarkdownText';
@@ -57,6 +58,7 @@ export default function AiChatScreen() {
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const requireAuth = useRequireAuth();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -161,7 +163,7 @@ export default function AiChatScreen() {
         </View>
       ) : null}
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: spacing.md + insets.bottom }]}>
         <TextInput
           style={styles.input}
           placeholder={t('ai.placeholder')}
