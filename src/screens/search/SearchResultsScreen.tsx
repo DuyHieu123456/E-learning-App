@@ -1,8 +1,10 @@
 // SearchResultsScreen — owner: Khanh
-// Real search + filters over the catalog (api.ts): keyword matches title
-// AND description; filters for category, price band and minimum rating;
-// four sort orders. All matching logic lives in filterCourses()
-// (src/utils/logic.ts) — this screen only holds the filter UI state.
+// Real search + filters over the catalog (api.ts): keyword matches
+// title, description, teacher name and category name — diacritic-free,
+// so "lap trinh" finds "Lập trình"; filters for category, price band
+// and minimum rating; four sort orders. All matching logic lives in
+// filterCourses() (src/utils/logic.ts) — this screen only holds the
+// filter UI state.
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
@@ -14,7 +16,7 @@ import { ErrorView, LoadingView } from '../../components/DataState';
 import { useSettings } from '../../context/SettingsContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
-import { fetchCategories, fetchCourses } from '../../services/api';
+import { fetchCategories, fetchCourses, fetchTeachers } from '../../services/api';
 import type { Palette } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -56,15 +58,31 @@ export default function SearchResultsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, loading, error, retry } = useAsyncData(async () => {
-    const [courses, categories] = await Promise.all([fetchCourses(), fetchCategories()]);
-    return { courses, categories };
+    const [courses, categories, teachers] = await Promise.all([
+      fetchCourses(),
+      fetchCategories(),
+      fetchTeachers(),
+    ]);
+    return { courses, categories, teachers };
   });
 
   if (loading) return <LoadingView />;
   if (error || !data) return <ErrorView message={error} onRetry={retry} />;
   const { courses, categories } = data;
 
-  const results = filterCourses(courses, { query: text, categoryId, priceBand, minRating, sort });
+  const teacherNames: Record<string, string> = {};
+  for (const t of data.teachers) teacherNames[t.id] = t.name;
+  const categoryNames: Record<string, string> = {};
+  for (const c of categories) categoryNames[c.id] = c.name;
+  const results = filterCourses(courses, {
+    query: text,
+    categoryId,
+    priceBand,
+    minRating,
+    sort,
+    teacherNames,
+    categoryNames,
+  });
 
   const chip = (active: boolean) => [styles.chip, active && styles.chipActive];
   const chipText = (active: boolean) => [styles.chipText, active && styles.chipTextActive];

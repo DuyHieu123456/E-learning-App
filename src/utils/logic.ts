@@ -124,6 +124,25 @@ export interface CourseFilter {
   priceBand?: PriceBand;
   minRating?: number; // 0 = no rating filter
   sort?: SortKey;
+  // Optional id -> display-name lookups so the keyword also matches the
+  // course's teacher and category (Course only stores their ids).
+  teacherNames?: Record<string, string>;
+  categoryNames?: Record<string, string>;
+}
+
+// Vietnamese-friendly text normalization for search: map đ/Đ explicitly
+// (they do NOT decompose under NFD), NFD-decompose everything else and
+// strip the combining marks (accents + tone marks), then lowercase and
+// collapse whitespace. Applied to BOTH the query and every searched
+// field, so "lap trinh" finds "Lập trình", "THIET KE" finds "thiết kế".
+export function normalizeText(input: string): string {
+  return input
+    .replace(/[đĐ]/g, (ch) => (ch === 'đ' ? 'd' : 'D'))
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function inPriceBand(course: Course, band: PriceBand): boolean {
@@ -141,13 +160,19 @@ function inPriceBand(course: Course, band: PriceBand): boolean {
 }
 
 export function filterCourses(courses: Course[], filter: CourseFilter): Course[] {
-  const q = (filter.query ?? '').trim().toLowerCase();
+  const q = normalizeText(filter.query ?? '');
   const results = courses.filter((course) => {
     if (filter.categoryId && course.categoryId !== filter.categoryId) return false;
     if (q) {
-      const inTitle = course.title.toLowerCase().includes(q);
-      const inDescription = course.description.toLowerCase().includes(q);
-      if (!inTitle && !inDescription) return false;
+      // Keyword matches title, description, teacher name or category
+      // name — all compared diacritic-free (normalizeText on both sides).
+      const fields = [
+        course.title,
+        course.description,
+        filter.teacherNames?.[course.teacherId] ?? '',
+        filter.categoryNames?.[course.categoryId] ?? '',
+      ];
+      if (!fields.some((f) => normalizeText(f).includes(q))) return false;
     }
     if (filter.priceBand && !inPriceBand(course, filter.priceBand)) return false;
     if (filter.minRating && course.rating < filter.minRating) return false;
