@@ -10,11 +10,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -59,6 +60,15 @@ export default function AiChatScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const requireAuth = useRequireAuth();
   const insets = useSafeAreaInsets();
+  // Android (edge-to-edge): KeyboardAvoidingView does not lift the composer,
+  // so track the keyboard height and pad the container ourselves.
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -106,7 +116,7 @@ export default function AiChatScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, Platform.OS === 'android' && kbHeight > 0 ? { paddingBottom: kbHeight } : undefined]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {context ? (

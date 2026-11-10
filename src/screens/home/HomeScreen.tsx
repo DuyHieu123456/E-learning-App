@@ -24,6 +24,7 @@ import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories, fetchCourses, fetchTeachers } from '../../services/api';
 import type { Palette } from '../../theme/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { completedIdsFor, progressPercentFor, purchasedCourses } from '../../utils/logic';
@@ -33,6 +34,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const { colors } = useSettings();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
@@ -75,7 +77,7 @@ export default function HomeScreen() {
     <FlatList
       data={courses}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { paddingTop: spacing.lg + insets.top }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       ListHeaderComponent={
         <View>

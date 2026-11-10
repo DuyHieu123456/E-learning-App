@@ -15,6 +15,7 @@ import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCategories } from '../../services/api';
 import type { Palette } from '../../theme/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, spacing } from '../../theme/spacing';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -25,6 +26,7 @@ const HOT_TOPICS = ['UX', 'Python', 'Java', 'SQL', 'Figma', 'Marketing', 'Photog
 export default function SearchScreen() {
   const navigation = useNavigation<Nav>();
   const { colors } = useSettings();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [query, setQuery] = useState('');
@@ -38,7 +40,7 @@ export default function SearchScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: spacing.lg + insets.top }]}>
       <View style={styles.searchRow}>
         <TextInput
           style={styles.input}

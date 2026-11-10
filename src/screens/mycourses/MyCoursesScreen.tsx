@@ -21,6 +21,7 @@ import { useAsyncData } from '../../hooks/useAsyncData';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
 import type { Palette } from '../../theme/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { completedIdsFor, groupOf, progressPercentFor, purchasedCourses } from '../../utils/logic';
@@ -37,6 +38,7 @@ const GROUP_KEYS: { key: MyCourseGroup; labelKey: string }[] = [
 export default function MyCoursesScreen() {
   const navigation = useNavigation<Nav>();
   const { colors } = useSettings();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const app = useAppState();
@@ -64,7 +66,7 @@ export default function MyCoursesScreen() {
     <FlatList
       data={visible}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { paddingTop: spacing.lg + insets.top }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       ListHeaderComponent={
         <View>

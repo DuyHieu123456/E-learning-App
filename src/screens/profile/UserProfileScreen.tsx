@@ -24,6 +24,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
 import { AuthError } from '../../services/auth';
 import type { Palette } from '../../theme/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { groupOf, purchasedCourses } from '../../utils/logic';
@@ -33,6 +34,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function UserProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { colors, language } = useSettings();
+  const insets = useSafeAreaInsets();
   const settings = useSettings();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -69,7 +71,7 @@ export default function UserProfileScreen() {
   const courseTitle = (id: string) => courses.find((c) => c.id === id)?.title ?? id;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: spacing.lg + insets.top }]}>
       <TouchableOpacity style={styles.settingsBtn} onPress={() => navigation.navigate('Settings')}>
         <Ionicons name="settings-outline" size={24} color={colors.text} />
         <Text style={styles.settingsText}>{t('profile.settings')}</Text>
