@@ -26,9 +26,18 @@
 //   progress references stay valid across API and fallback modes.
 // - The catalog is fetched once and cached in memory; call
 //   refreshCatalog() to force a refetch (used by retry buttons).
+// - Since 2026-11-10 the fetched catalog is ALSO cached on disk
+//   (AsyncStorage, key elearning.catalogCache.v1, with a timestamp):
+//   on the next launch the cached copy is returned immediately
+//   (stale-while-revalidate) while a background fetch refreshes both
+//   the memory and disk copies — so the app opens instantly and keeps
+//   working offline after the first successful load. The local mock
+//   data is now only the last resort: no network AND no disk cache.
 // - Personal data (bookmark / cart / progress) is NOT here — it lives in
 //   AsyncStorage via src/storage/storage.ts. fetchCurrentUser() stays
 //   local and synchronous for the same reason: the user is device-local.
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   mockCategories,
@@ -254,10 +263,75 @@ async function loadCatalogFromApi(): Promise<Catalog> {
   return assembleCatalog(categories, teachers, courses, chapters, lessons, reviews, projects, questions, quizzes);
 }
 
+// ---------------------------------------------------------------------------
+// Disk cache (AsyncStorage) — stale-while-revalidate
+// ---------------------------------------------------------------------------
+
+const CATALOG_CACHE_KEY = 'elearning.catalogCache.v1';
+
+interface CatalogCacheEntry {
+  savedAt: number; // epoch ms of the successful network fetch
+  catalog: Catalog;
+}
+
+async function readCatalogCache(): Promise<Catalog | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CatalogCacheEntry;
+    if (!parsed || typeof parsed.savedAt !== 'number' || !Array.isArray(parsed.catalog?.courses)) {
+      return null;
+    }
+    return parsed.catalog;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCatalogCache(catalog: Catalog): Promise<void> {
+  try {
+    const entry: CatalogCacheEntry = { savedAt: Date.now(), catalog };
+    await AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // Cache is best-effort; a failed write only loses the speedup.
+  }
+}
+
+async function fetchFreshCatalog(): Promise<Catalog> {
+  const fresh = await loadCatalogFromApi();
+  void writeCatalogCache(fresh);
+  return fresh;
+}
+
+// With a disk cache present, return it immediately and refresh the
+// in-memory + disk copies in the background. Without one, await the
+// network (a failure propagates to loadCatalog's local-mock fallback).
+async function loadCatalogSwr(): Promise<Catalog> {
+  if (!forceNetworkOnce) {
+    const cached = await readCatalogCache();
+    if (cached) {
+      void fetchFreshCatalog()
+        .then((fresh) => {
+          catalogPromise = Promise.resolve(fresh);
+        })
+        .catch(() => {
+          // Offline refresh failed — keep serving the cache this run.
+        });
+      return cached;
+    }
+  }
+  forceNetworkOnce = false;
+  return fetchFreshCatalog();
+}
+
 let catalogPromise: Promise<Catalog> | null = null;
+// Set by refreshCatalog(): the next load must hit the network instead
+// of serving the disk cache (pull-to-refresh / retry buttons).
+let forceNetworkOnce = false;
 
 export function refreshCatalog(): void {
   catalogPromise = null;
+  forceNetworkOnce = true;
 }
 
 function loadCatalog(): Promise<Catalog> {
@@ -265,7 +339,7 @@ function loadCatalog(): Promise<Catalog> {
     if (!isApiConfigured()) {
       catalogPromise = Promise.resolve(localCatalog());
     } else {
-      catalogPromise = loadCatalogFromApi().catch((err: unknown) => {
+      catalogPromise = loadCatalogSwr().catch((err: unknown) => {
         // Fall back to local data for THIS load, but do not cache the
         // failure — the next loadCatalog() call retries the API.
         catalogPromise = null;
