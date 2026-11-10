@@ -20,6 +20,7 @@ import { useAsyncData } from '../../hooks/useAsyncData';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import type { RootStackParamList } from '../../navigation/types';
 import { fetchCourses } from '../../services/api';
+import { recordEnrollments } from '../../services/enrollments';
 import type { Palette } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -101,6 +102,10 @@ export default function CartScreen() {
       ...(appliedCode ? { promoCode: appliedCode } : {}),
       createdAt: Date.now(),
     });
+    // Mirror the purchase into public.enrollments (real DB rows for
+    // the ERD relation). Fire-and-forget: it never blocks or breaks
+    // checkout — see src/services/enrollments.ts.
+    void recordEnrollments(bought);
     setJustBought(bought);
   };
 
