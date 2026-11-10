@@ -22,6 +22,9 @@ const inputs = [
 const aiPath = path.join(root, 'src/services/ai.ts');
 const hasAi = existsSync(aiPath);
 if (hasAi) inputs.push(aiPath);
+const mdPath = path.join(root, 'src/utils/markdown.ts');
+const hasMd = existsSync(mdPath);
+if (hasMd) inputs.push(mdPath);
 
 execFileSync(
   path.join(root, 'node_modules/.bin/tsc'),
@@ -148,6 +151,7 @@ if (hasAi) {
     course: { ...catalog[0], chapters: [{ id: 'ch', order: 1, title: 'Mở đầu', lessons: [lesson('Bài 1: Cài đặt')] }] },
   });
   check('system prompt contains lesson context', ctxPrompt.includes('Cài đặt'));
+  check('system prompt has formatting rules', prompt.includes('ĐỊNH DẠNG') && prompt.includes('KHÔNG dùng bảng'));
 
   const valid = JSON.stringify([
     { question: 'Q1?', options: ['a', 'b', 'c', 'd'], correctIndex: 2, explanation: 'Vì...' },
@@ -169,6 +173,71 @@ if (hasAi) {
     check('missing key returns ok:false (no network)', res.ok === false);
     check('missing key error is the config message', !res.ok && res.error.includes('API key'));
   }
+}
+
+// ---------------------------------------------------------------------
+if (hasMd) {
+  console.log('markdown.ts parser (AI chat rendering)');
+  const md = require(path.join(out, 'utils/markdown.js'));
+
+  // Fixture replicating the real Gemini answer from the user's
+  // screenshot: greeting paragraph, **group** lead-in bullets with
+  // nested * bullets whose course names are *italic*, closing line.
+  const fixture = [
+    'Chào bạn! Để gợi ý khóa học phù hợp nhất cho người mới bắt đầu, bạn muốn tập trung phát triển kỹ năng nào (lập trình, thiết kế, nhiếp ảnh, hay kỹ năng mềm)?',
+    '',
+    'Dưới đây là một số khóa học cực kỳ thân thiện với người chưa có nền tảng trong app của chúng ta:',
+    '',
+    '* **Lập trình:**',
+    '    * *Python for Beginners* (Giảng viên: Minh Tran) — 399.000đ (Dễ học, cú pháp gần gũi như tiếng Anh).',
+    '    * *Java Fundamentals* (Giảng viên: Minh Tran) — 439.000đ.',
+    '* **Thiết kế & Sáng tạo:**',
+    '    * *Photoshop Essentials* (Giảng viên: Anna Nguyen) — 329.000đ.',
+    '',
+    'Bạn hãy cho mình biết bạn đang hứng thú với lĩnh vực nào để mình tư vấn chi tiết hơn nhé!',
+  ].join('\n');
+  const blocks = md.parseMarkdown(fixture);
+  const visible = blocks.map((b) => md.blockPlainText(b)).join('\n');
+  check('no visible text contains **', !visible.includes('**'));
+  check('no visible text contains a stray *', !visible.includes('*'));
+  eq('first block is the greeting paragraph', blocks[0].type, 'paragraph');
+  check('greeting text preserved', md.blockPlainText(blocks[0]).startsWith('Chào bạn!'));
+  eq('last block is the closing paragraph', blocks[blocks.length - 1].type, 'paragraph');
+
+  const bullets = blocks.filter((b) => b.type === 'bullet');
+  eq('fixture has 5 bullet blocks', bullets.length, 5);
+  eq('group bullets are level 0', bullets.filter((b) => b.level === 0).length, 2);
+  eq('nested bullets are level 1', bullets.filter((b) => b.level === 1).length, 3);
+
+  const leadIn = bullets.find((b) => md.blockPlainText(b) === 'Lập trình:');
+  check('group lead-in block exists', !!leadIn);
+  check('lead-in is a single bold span',
+    !!leadIn && leadIn.spans.length === 1 && leadIn.spans[0].bold && leadIn.spans[0].text === 'Lập trình:');
+  const python = bullets.find((b) => md.blockPlainText(b).includes('Python for Beginners'));
+  check('course line found', !!python);
+  check('course name is an italic span',
+    !!python && python.spans.some((s) => s.italic && s.text === 'Python for Beginners'));
+  check('course line keeps teacher + price',
+    !!python && md.blockPlainText(python).includes('Minh Tran') && md.blockPlainText(python).includes('399.000đ'));
+
+  const numbered = md.parseMarkdown('1. Bước một\n2. Bước hai');
+  eq('numbered items detected', numbered.filter((b) => b.type === 'numbered').length, 2);
+  eq('numbered marker kept', numbered[0].marker, '1.');
+  eq('a price is not a numbered item', md.parseMarkdown('Giá 399.000đ hôm nay')[0].type, 'paragraph');
+
+  const heading = md.parseMarkdown('## Tổng quan');
+  eq('heading detected', heading[0].type, 'heading');
+  eq('heading level kept', heading[0].level, 2);
+
+  const inline = md.parseInline('Học **Python** và *ghi chú* với `code` nhé');
+  check('inline bold span', inline.some((s) => s.bold && s.text === 'Python'));
+  check('inline italic span', inline.some((s) => s.italic && s.text === 'ghi chú'));
+  check('inline code span', inline.some((s) => s.code && s.text === 'code'));
+  check('inline visible text has no markers', !md.spansPlainText(inline).includes('*') && !md.spansPlainText(inline).includes('`'));
+
+  eq('malformed **không đóng stays literal', md.blockPlainText(md.parseMarkdown('**không đóng')[0]), '**không đóng');
+  eq('lone asterisks stay literal', md.spansPlainText(md.parseInline('2 * 3 = 6')), '2 * 3 = 6');
+  eq('empty input parses to no blocks', md.parseMarkdown('').length, 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

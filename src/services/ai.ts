@@ -74,6 +74,7 @@ export function buildSystemPrompt(
     '- Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng, thân thiện; cho ví dụ cụ thể khi giải thích kiến thức.',
     '- Khi tư vấn/gợi ý khóa học, CHỈ được nhắc tới các khóa trong danh sách dưới đây (kèm đúng giá tiền), không bịa khóa học khác.',
     '- Nếu học viên hỏi ngoài phạm vi học tập và các khóa học này, hãy khéo léo hướng về chủ đề học tập.',
+    '- ĐỊNH DẠNG (app hiển thị markdown cơ bản): chia ý thành các đoạn ngắn, cách nhau một dòng trống. Dùng **in đậm** cho tên khóa học và thuật ngữ quan trọng. Khi liệt kê, dùng danh sách gạch đầu dòng "-" (chỉ lồng nhau tối đa 1 cấp). KHÔNG dùng bảng, KHÔNG dùng tiêu đề bắt đầu bằng "#". Trả lời tập trung vào câu hỏi, không lặp lại nguyên văn toàn bộ danh sách khóa học khi không cần thiết.',
     '',
     'DANH SÁCH KHÓA HỌC HIỆN CÓ TRONG APP:',
   ];

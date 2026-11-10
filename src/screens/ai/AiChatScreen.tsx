@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 
 import { ErrorView, LoadingView } from '../../components/DataState';
+import MarkdownText from '../../components/MarkdownText';
 import { useSettings } from '../../context/SettingsContext';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
@@ -131,9 +132,13 @@ export default function AiChatScreen() {
         ListEmptyComponent={<Text style={styles.empty}>{t('ai.empty')}</Text>}
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.role === 'user' ? styles.bubbleUser : styles.bubbleModel]}>
-            <Text style={item.role === 'user' ? styles.bubbleUserText : styles.bubbleModelText}>
-              {item.text}
-            </Text>
+            {item.role === 'user' ? (
+              <Text style={styles.bubbleUserText}>{item.text}</Text>
+            ) : (
+              // AI answers arrive as markdown — render it (bold, lists)
+              // instead of showing raw ** asterisks in a plain Text.
+              <MarkdownText text={item.text} />
+            )}
           </View>
         )}
         ListFooterComponent={
