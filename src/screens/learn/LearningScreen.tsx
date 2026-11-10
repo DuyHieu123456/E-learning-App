@@ -33,6 +33,8 @@ import {
   fetchQuestionsForCourse,
   fetchQuizForCourse,
 } from '../../services/api';
+import { generatePracticeQuiz } from '../../services/ai';
+import type { QuizQuestion } from '../../data/types';
 import { pickProjectFile, uploadProjectFile } from '../../services/projectUpload';
 import type { PickedFile } from '../../services/projectUpload';
 import type { Palette } from '../../theme/colors';
@@ -68,6 +70,12 @@ export default function LearningScreen() {
   const [projFile, setProjFile] = useState<PickedFile | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadFailed, setUploadFailed] = useState(false);
+  // AI practice quiz: generated on demand by Gemini, kept ONLY in
+  // this screen's state — never persisted, never recorded as a score.
+  const [aiQuiz, setAiQuiz] = useState<QuizQuestion[] | null>(null);
+  const [aiQuizAnswers, setAiQuizAnswers] = useState<Record<string, number>>({});
+  const [aiQuizLoading, setAiQuizLoading] = useState(false);
+  const [aiQuizError, setAiQuizError] = useState<string | null>(null);
   // Q&A form + per-question comment boxes
   const [questionText, setQuestionText] = useState('');
   const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
@@ -170,6 +178,23 @@ export default function LearningScreen() {
       courseId: course.id,
       ...(targetId ? { lessonId: targetId } : {}),
     });
+  };
+
+  // "Tạo câu hỏi ôn tập bằng AI": ask Gemini for a fresh practice set
+  // about this course's lessons. Any failure only sets an error line —
+  // the screen, the official quiz and saved scores stay untouched.
+  const makePracticeQuiz = async () => {
+    if (!requireAuth()) return;
+    setAiQuizLoading(true);
+    setAiQuizError(null);
+    const res = await generatePracticeQuiz(course);
+    if (res.ok) {
+      setAiQuiz(res.questions);
+      setAiQuizAnswers({});
+    } else {
+      setAiQuizError(res.error);
+    }
+    setAiQuizLoading(false);
   };
 
   const submitComment = (questionId: string) => {
@@ -277,6 +302,57 @@ export default function LearningScreen() {
             <Ionicons name="sparkles-outline" size={18} color={colors.primaryDark} />
             <Text style={styles.aiBtnText}>{t('learn.explainAi')}</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.aiBtn, aiQuizLoading && styles.submitBtnDisabled]}
+            onPress={() => void makePracticeQuiz()}
+            disabled={aiQuizLoading}
+          >
+            <Ionicons name="help-circle-outline" size={18} color={colors.primaryDark} />
+            <Text style={styles.aiBtnText}>
+              {aiQuizLoading ? t('learn.practiceLoading') : aiQuiz ? t('learn.practiceRegen') : t('learn.practiceAi')}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.hint, { marginTop: spacing.sm }]}>{t('learn.practiceNote')}</Text>
+          {aiQuizError ? <Text style={styles.warn}>{aiQuizError}</Text> : null}
+          {aiQuiz
+            ? aiQuiz.map((q, qi) => {
+                const picked = aiQuizAnswers[q.id];
+                const answered = picked !== undefined;
+                return (
+                  <View key={q.id} style={[styles.card, { marginTop: spacing.md }]}>
+                    <Text style={styles.bodyBold}>
+                      {qi + 1}. {q.question}
+                    </Text>
+                    {q.options.map((option, oi) => {
+                      const selected = picked === oi;
+                      const isCorrect = q.correctIndex === oi;
+                      return (
+                        <TouchableOpacity
+                          key={oi}
+                          disabled={answered}
+                          style={[
+                            styles.aiOption,
+                            selected && styles.aiOptionSelected,
+                            answered && isCorrect && styles.aiOptionCorrect,
+                            answered && selected && !isCorrect && styles.aiOptionWrong,
+                          ]}
+                          onPress={() => setAiQuizAnswers((prev) => ({ ...prev, [q.id]: oi }))}
+                        >
+                          <Text style={styles.body}>
+                            {String.fromCharCode(65 + oi)}. {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {answered ? (
+                      <Text style={styles.hint}>
+                        {t('quiz.explanation')}: {q.explanation}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })
+            : null}
         </View>
       )}
 
@@ -518,6 +594,17 @@ function createStyles(c: Palette) {
       marginTop: spacing.xs,
     },
     aiBtnText: { color: c.primaryDark, fontWeight: '700' },
+    aiOption: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: radius.sm,
+      padding: spacing.md,
+      backgroundColor: c.background,
+      marginTop: spacing.xs,
+    },
+    aiOptionSelected: { borderColor: c.primary, borderWidth: 2 },
+    aiOptionCorrect: { borderColor: '#2E7D32', backgroundColor: 'rgba(46,125,50,0.12)' },
+    aiOptionWrong: { borderColor: c.danger, backgroundColor: 'rgba(229,57,53,0.10)' },
     submitBtnDisabled: { opacity: 0.4 },
     submitText: { color: c.onPrimary, fontWeight: '700' },
     warn: { color: c.danger, marginTop: spacing.sm },
