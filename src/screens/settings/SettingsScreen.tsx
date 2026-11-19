@@ -3,11 +3,10 @@
 // i18next), account summary + sign out, app version/about.
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { useAuth } from '../../context/AuthContext';
 import { AuthError } from '../../services/auth';
-import { requestNotificationPermission, syncStudyReminder } from '../../services/reminders';
 import { useSettings } from '../../context/SettingsContext';
 import type { Palette } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
@@ -25,29 +24,6 @@ export default function SettingsScreen() {
 
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [reminderError, setReminderError] = useState<string | null>(null);
-
-  // Daily study reminder: enabling asks for the OS permission first
-  // (the only place in the app that prompts); the SettingsContext
-  // effect also re-syncs the schedule whenever the setting changes.
-  const applyReminder = async (enabled: boolean, hour: number) => {
-    if (enabled) {
-      const ok = await requestNotificationPermission();
-      if (!ok) {
-        setReminderError(t('settings.reminderDenied'));
-        return;
-      }
-    }
-    setReminderError(null);
-    settings.setReminder(enabled, hour, settings.reminderMinute);
-    void syncStudyReminder({
-      enabled,
-      hour,
-      minute: settings.reminderMinute,
-      title: t('settings.reminderNotifTitle'),
-      body: t('settings.reminderNotifBody'),
-    });
-  };
 
   // One-tap sign-in (same as Profile): no detour through Login.
   const signIn = async () => {
@@ -83,31 +59,6 @@ export default function SettingsScreen() {
           <Text style={segText(settings.language === 'en')}>English</Text>
         </TouchableOpacity>
       </View>
-
-      {Platform.OS !== 'web' ? (
-        <>
-          <Text style={styles.group}>{t('settings.reminder')}</Text>
-          <View style={styles.segmentRow}>
-            <TouchableOpacity style={seg(settings.reminderEnabled)} onPress={() => void applyReminder(true, settings.reminderHour)}>
-              <Text style={segText(settings.reminderEnabled)}>{t('settings.reminderOn')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={seg(!settings.reminderEnabled)} onPress={() => void applyReminder(false, settings.reminderHour)}>
-              <Text style={segText(!settings.reminderEnabled)}>{t('settings.reminderOff')}</Text>
-            </TouchableOpacity>
-          </View>
-          {settings.reminderEnabled ? (
-            <View style={[styles.segmentRow, { marginTop: spacing.sm }]}>
-              {[7, 19, 20].map((h) => (
-                <TouchableOpacity key={h} style={seg(settings.reminderHour === h)} onPress={() => void applyReminder(true, h)}>
-                  <Text style={segText(settings.reminderHour === h)}>{`${h}:00`}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-          <Text style={[styles.hint, { marginTop: spacing.sm }]}>{t('settings.reminderHint')}</Text>
-          {reminderError ? <Text style={[styles.hint, { color: c.danger }]}>{reminderError}</Text> : null}
-        </>
-      ) : null}
 
       <Text style={styles.group}>{t('settings.account')}</Text>
       {user ? (

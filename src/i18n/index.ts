@@ -226,13 +226,7 @@ const vi = {
     logout: 'Đăng xuất',
     version: 'Phiên bản ứng dụng',
     about: 'Ứng dụng học trực tuyến tự học theo tiến độ cá nhân.',
-    reminder: 'Nhắc học hằng ngày',
-    reminderHint: 'App gửi một thông báo nhắc vào học mỗi ngày vào giờ bạn chọn. Thông báo chạy ngay trên máy, không cần mạng.',
-    reminderOn: 'Bật',
-    reminderOff: 'Tắt',
-    reminderDenied: 'Máy chưa cấp quyền thông báo cho app — hãy vào phần cài đặt của máy để bật, rồi thử lại.',
-    reminderNotifTitle: 'Đến giờ học rồi!',
-    reminderNotifBody: 'Vào học tiếp một bài để giữ nhịp học mỗi ngày nhé.',
+
   },
   onboarding: {
     skip: 'Bỏ qua',
@@ -493,13 +487,7 @@ const en: typeof vi = {
     logout: 'Sign out',
     version: 'App version',
     about: 'A self-paced online learning app.',
-    reminder: 'Daily study reminder',
-    reminderHint: 'The app sends one notification at your chosen time every day. It runs on-device, no network needed.',
-    reminderOn: 'On',
-    reminderOff: 'Off',
-    reminderDenied: 'Notifications are not allowed for the app yet — enable them in the device settings, then try again.',
-    reminderNotifTitle: 'Time to study!',
-    reminderNotifBody: 'Open the app and continue a lesson to keep your daily streak.',
+
   },
   onboarding: {
     skip: 'Skip',

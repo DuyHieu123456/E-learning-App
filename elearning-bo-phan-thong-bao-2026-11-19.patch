@@ -1,0 +1,306 @@
+diff --git a/package.json b/package.json
+index dcf5beb..b6f350f 100644
+--- a/package.json
++++ b/package.json
+@@ -15,7 +15,6 @@
+     "expo-image": "~58.0.17",
+     "expo-image-picker": "~58.0.10",
+     "expo-linking": "~58.0.14",
+-    "expo-notifications": "~58.1.9",
+     "expo-print": "~58.0.7",
+     "expo-sharing": "~58.0.20",
+     "expo-status-bar": "~58.0.4",
+diff --git a/src/context/SettingsContext.tsx b/src/context/SettingsContext.tsx
+index 473755d..6fff93a 100644
+--- a/src/context/SettingsContext.tsx
++++ b/src/context/SettingsContext.tsx
+@@ -26,9 +26,6 @@ interface Settings {
+   displayName: string; // '' = use the Google account name
+   avatarUri: string; // '' = letter avatar
+   recentSearches: string[]; // newest first, max 8
+-  reminderEnabled: boolean;
+-  reminderHour: number;
+-  reminderMinute: number;
+ }
+ 
+ const DEFAULTS: Settings = {
+@@ -39,9 +36,6 @@ const DEFAULTS: Settings = {
+   displayName: '',
+   avatarUri: '',
+   recentSearches: [],
+-  reminderEnabled: false,
+-  reminderHour: 19,
+-  reminderMinute: 0,
+ };
+ 
+ const KEY = 'elearning.settings.v1';
+@@ -64,10 +58,6 @@ export interface SettingsContextValue {
+   recentSearches: string[];
+   addRecentSearch: (query: string) => void;
+   clearRecentSearches: () => void;
+-  reminderEnabled: boolean;
+-  reminderHour: number;
+-  reminderMinute: number;
+-  setReminder: (enabled: boolean, hour: number, minute: number) => void;
+ }
+ 
+ const SettingsContext = createContext<SettingsContextValue | null>(null);
+@@ -109,13 +99,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
+     });
+   }, []);
+ 
+-  // NOTE: the study reminder is (re)scheduled ONLY from the Settings
+-  // screen toggle, never from an effect here. Scheduled notifications
+-  // survive reboots on their own (the OS + native module re-arm
+-  // them), and touching expo-notifications at app start would
+-  // evaluate its module graph even on dev builds whose APK predates
+-  // the library — exactly the startup crash this avoids.
+-
+   const value = useMemo<SettingsContextValue>(
+     () => ({
+       ready,
+@@ -143,10 +126,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
+         update({ recentSearches: [q, ...rest].slice(0, 8) });
+       },
+       clearRecentSearches: () => update({ recentSearches: [] }),
+-      reminderEnabled: settings.reminderEnabled,
+-      reminderHour: settings.reminderHour,
+-      reminderMinute: settings.reminderMinute,
+-      setReminder: (enabled, hour, minute) => update({ reminderEnabled: enabled, reminderHour: hour, reminderMinute: minute }),
+     }),
+     [ready, settings, update],
+   );
+diff --git a/src/i18n/index.ts b/src/i18n/index.ts
+index b80e956..f38addd 100644
+--- a/src/i18n/index.ts
++++ b/src/i18n/index.ts
+@@ -226,13 +226,7 @@ const vi = {
+     logout: 'Đăng xuất',
+     version: 'Phiên bản ứng dụng',
+     about: 'Ứng dụng học trực tuyến tự học theo tiến độ cá nhân.',
+-    reminder: 'Nhắc học hằng ngày',
+-    reminderHint: 'App gửi một thông báo nhắc vào học mỗi ngày vào giờ bạn chọn. Thông báo chạy ngay trên máy, không cần mạng.',
+-    reminderOn: 'Bật',
+-    reminderOff: 'Tắt',
+-    reminderDenied: 'Máy chưa cấp quyền thông báo cho app — hãy vào phần cài đặt của máy để bật, rồi thử lại.',
+-    reminderNotifTitle: 'Đến giờ học rồi!',
+-    reminderNotifBody: 'Vào học tiếp một bài để giữ nhịp học mỗi ngày nhé.',
++
+   },
+   onboarding: {
+     skip: 'Bỏ qua',
+@@ -493,13 +487,7 @@ const en: typeof vi = {
+     logout: 'Sign out',
+     version: 'App version',
+     about: 'A self-paced online learning app.',
+-    reminder: 'Daily study reminder',
+-    reminderHint: 'The app sends one notification at your chosen time every day. It runs on-device, no network needed.',
+-    reminderOn: 'On',
+-    reminderOff: 'Off',
+-    reminderDenied: 'Notifications are not allowed for the app yet — enable them in the device settings, then try again.',
+-    reminderNotifTitle: 'Time to study!',
+-    reminderNotifBody: 'Open the app and continue a lesson to keep your daily streak.',
++
+   },
+   onboarding: {
+     skip: 'Skip',
+diff --git a/src/screens/settings/SettingsScreen.tsx b/src/screens/settings/SettingsScreen.tsx
+index 885fec3..4d4e383 100644
+--- a/src/screens/settings/SettingsScreen.tsx
++++ b/src/screens/settings/SettingsScreen.tsx
+@@ -3,11 +3,10 @@
+ // i18next), account summary + sign out, app version/about.
+ import { useMemo, useState } from 'react';
+ import { useTranslation } from 'react-i18next';
+-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
++import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+ 
+ import { useAuth } from '../../context/AuthContext';
+ import { AuthError } from '../../services/auth';
+-import { requestNotificationPermission, syncStudyReminder } from '../../services/reminders';
+ import { useSettings } from '../../context/SettingsContext';
+ import type { Palette } from '../../theme/colors';
+ import { radius, spacing } from '../../theme/spacing';
+@@ -25,29 +24,6 @@ export default function SettingsScreen() {
+ 
+   const [signingIn, setSigningIn] = useState(false);
+   const [authError, setAuthError] = useState<string | null>(null);
+-  const [reminderError, setReminderError] = useState<string | null>(null);
+-
+-  // Daily study reminder: enabling asks for the OS permission first
+-  // (the only place in the app that prompts); the SettingsContext
+-  // effect also re-syncs the schedule whenever the setting changes.
+-  const applyReminder = async (enabled: boolean, hour: number) => {
+-    if (enabled) {
+-      const ok = await requestNotificationPermission();
+-      if (!ok) {
+-        setReminderError(t('settings.reminderDenied'));
+-        return;
+-      }
+-    }
+-    setReminderError(null);
+-    settings.setReminder(enabled, hour, settings.reminderMinute);
+-    void syncStudyReminder({
+-      enabled,
+-      hour,
+-      minute: settings.reminderMinute,
+-      title: t('settings.reminderNotifTitle'),
+-      body: t('settings.reminderNotifBody'),
+-    });
+-  };
+ 
+   // One-tap sign-in (same as Profile): no detour through Login.
+   const signIn = async () => {
+@@ -84,31 +60,6 @@ export default function SettingsScreen() {
+         </TouchableOpacity>
+       </View>
+ 
+-      {Platform.OS !== 'web' ? (
+-        <>
+-          <Text style={styles.group}>{t('settings.reminder')}</Text>
+-          <View style={styles.segmentRow}>
+-            <TouchableOpacity style={seg(settings.reminderEnabled)} onPress={() => void applyReminder(true, settings.reminderHour)}>
+-              <Text style={segText(settings.reminderEnabled)}>{t('settings.reminderOn')}</Text>
+-            </TouchableOpacity>
+-            <TouchableOpacity style={seg(!settings.reminderEnabled)} onPress={() => void applyReminder(false, settings.reminderHour)}>
+-              <Text style={segText(!settings.reminderEnabled)}>{t('settings.reminderOff')}</Text>
+-            </TouchableOpacity>
+-          </View>
+-          {settings.reminderEnabled ? (
+-            <View style={[styles.segmentRow, { marginTop: spacing.sm }]}>
+-              {[7, 19, 20].map((h) => (
+-                <TouchableOpacity key={h} style={seg(settings.reminderHour === h)} onPress={() => void applyReminder(true, h)}>
+-                  <Text style={segText(settings.reminderHour === h)}>{`${h}:00`}</Text>
+-                </TouchableOpacity>
+-              ))}
+-            </View>
+-          ) : null}
+-          <Text style={[styles.hint, { marginTop: spacing.sm }]}>{t('settings.reminderHint')}</Text>
+-          {reminderError ? <Text style={[styles.hint, { color: c.danger }]}>{reminderError}</Text> : null}
+-        </>
+-      ) : null}
+-
+       <Text style={styles.group}>{t('settings.account')}</Text>
+       {user ? (
+         <View style={styles.card}>
+diff --git a/src/services/reminders.ts b/src/services/reminders.ts
+deleted file mode 100644
+index 1cacde0..0000000
+--- a/src/services/reminders.ts
++++ /dev/null
+@@ -1,115 +0,0 @@
+-// reminders.ts — daily study reminder (LOCAL notifications only).
+-//
+-// One repeating notification per day at the user-chosen time, fully
+-// on-device: no push server, no network. The setting itself lives in
+-// SettingsContext (device preferences); this module only talks to the
+-// OS scheduler. Web is a no-op (expo-notifications scheduling is not
+-// relied on there) — the Settings UI hides the section on web.
+-//
+-// expo-notifications is loaded LAZILY (dynamic import, first use):
+-// its JS eagerly requires the native module at import time, so a
+-// static import crashes the whole app on a development build whose
+-// APK predates the library. With the lazy load, such a build simply
+-// runs without reminders until the APK is rebuilt.
+-
+-import { requireOptionalNativeModule } from 'expo-modules-core';
+-import { Platform } from 'react-native';
+-
+-const CHANNEL_ID = 'study-reminder';
+-
+-type NotificationsModule = typeof import('expo-notifications');
+-
+-let cached: NotificationsModule | null | undefined;
+-
+-async function loadNotifications(): Promise<NotificationsModule | null> {
+-  if (cached !== undefined) return cached;
+-  if (Platform.OS === 'web') {
+-    cached = null;
+-    return cached;
+-  }
+-  // Gate BEFORE importing: on a build without the native module the
+-  // import itself throws while the module graph evaluates, and that
+-  // throw can escape a try/catch around the dynamic import (Metro
+-  // evaluates the module synchronously). requireOptionalNativeModule
+-  // comes from expo-modules-core, which every Expo build contains,
+-  // and returns null instead of throwing.
+-  if (!requireOptionalNativeModule('ExpoPushTokenManager')) {
+-    cached = null;
+-    return cached;
+-  }
+-  try {
+-    cached = await import('expo-notifications');
+-    // Show the reminder as a banner even if the app happens to be open.
+-    cached.setNotificationHandler({
+-      handleNotification: async () => ({
+-        shouldPlaySound: false,
+-        shouldSetBadge: false,
+-        shouldShowBanner: true,
+-        shouldShowList: true,
+-      }),
+-    });
+-  } catch {
+-    cached = null;
+-  }
+-  return cached;
+-}
+-
+-async function ensureAndroidChannel(Notifications: NotificationsModule): Promise<void> {
+-  if (Platform.OS !== 'android') return;
+-  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+-    name: 'Study reminder',
+-    importance: Notifications.AndroidImportance.DEFAULT,
+-  });
+-}
+-
+-// Ask for the notification permission (shows the OS prompt). Called
+-// ONLY from the Settings toggle — never silently at app start.
+-export async function requestNotificationPermission(): Promise<boolean> {
+-  const Notifications = await loadNotifications();
+-  if (!Notifications) return false;
+-  try {
+-    await ensureAndroidChannel(Notifications);
+-    const current = await Notifications.getPermissionsAsync();
+-    if (current.granted) return true;
+-    const asked = await Notifications.requestPermissionsAsync();
+-    return asked.granted;
+-  } catch {
+-    return false;
+-  }
+-}
+-
+-export interface ReminderSync {
+-  enabled: boolean;
+-  hour: number;
+-  minute: number;
+-  title: string;
+-  body: string;
+-}
+-
+-// Make the OS schedule match the setting: cancel whatever this app
+-// scheduled before, then (if enabled AND permission already granted)
+-// arm exactly one daily notification. Safe to call on every app start
+-// and on every setting change — it is idempotent.
+-export async function syncStudyReminder(opts: ReminderSync): Promise<void> {
+-  const Notifications = await loadNotifications();
+-  if (!Notifications) return;
+-  try {
+-    await Notifications.cancelAllScheduledNotificationsAsync();
+-    if (!opts.enabled) return;
+-    const { granted } = await Notifications.getPermissionsAsync();
+-    if (!granted) return;
+-    await ensureAndroidChannel(Notifications);
+-    await Notifications.scheduleNotificationAsync({
+-      content: { title: opts.title, body: opts.body },
+-      trigger: {
+-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+-        hour: opts.hour,
+-        minute: opts.minute,
+-        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+-      },
+-    });
+-  } catch {
+-    // Scheduling is best-effort: a failure here must never break the
+-    // app; the next app start re-syncs anyway.
+-  }
+-}
