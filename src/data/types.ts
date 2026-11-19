@@ -169,4 +169,7 @@ export interface PersistedState {
   likedQuestionIds: string[];
   orders: Order[];
   quizScores: QuizScore[];
+  // Vị trí xem dở của video bài học, theo lessonId (giây). Mở lại bài
+  // thì phát tiếp từ đây; xem hết bài thì xóa (lưu 0 = không còn).
+  lessonPositions: Record<string, number>;
 }

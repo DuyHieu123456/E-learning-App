@@ -25,7 +25,8 @@ const HOT_TOPICS = ['UX', 'Python', 'Java', 'SQL', 'Figma', 'Marketing', 'Photog
 
 export default function SearchScreen() {
   const navigation = useNavigation<Nav>();
-  const { colors } = useSettings();
+  const settings = useSettings();
+  const { colors } = settings;
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -35,9 +36,12 @@ export default function SearchScreen() {
   if (loading) return <LoadingView />;
   if (error || !categories) return <ErrorView message={error} onRetry={retry} />;
 
-  const submit = () => {
-    navigation.navigate('SearchResults', { query: query.trim() || undefined });
+  const goSearch = (q: string) => {
+    const trimmed = q.trim();
+    if (trimmed) settings.addRecentSearch(trimmed);
+    navigation.navigate('SearchResults', { query: trimmed || undefined });
   };
+  const submit = () => goSearch(query);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: spacing.lg + insets.top }]}>
@@ -55,6 +59,23 @@ export default function SearchScreen() {
           <Text style={styles.filterText}>{t('search.button')}</Text>
         </TouchableOpacity>
       </View>
+
+      {settings.recentSearches.length > 0 ? (
+        <>
+          <SectionHeader
+            title={t('search.recent')}
+            actionLabel={t('search.clearRecent')}
+            onActionPress={settings.clearRecentSearches}
+          />
+          <View style={styles.chipWrap}>
+            {settings.recentSearches.map((recent) => (
+              <TouchableOpacity key={recent} style={styles.chip} onPress={() => goSearch(recent)}>
+                <Text style={styles.chipText}>{recent}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       <SectionHeader title={t('search.hotTopics')} />
       <View style={styles.chipWrap}>

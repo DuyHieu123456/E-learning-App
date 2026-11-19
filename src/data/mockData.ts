@@ -237,6 +237,7 @@ export const initialPersistedState: PersistedState = {
   likedQuestionIds: [],
   orders: [],
   quizScores: [],
+  lessonPositions: {},
 };
 
 // ---------------------------------------------------------------- helpers (dùng chung, không phụ thuộc UI)

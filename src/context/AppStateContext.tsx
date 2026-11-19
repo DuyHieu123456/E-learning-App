@@ -71,6 +71,9 @@ export interface AppStateContextValue {
   // Orders + quiz results
   addOrder: (order: Order) => void;
   recordQuizScore: (score: QuizScore) => void;
+
+  // Video resume: last watched position (seconds) per lesson id.
+  setLessonPosition: (lessonId: string, seconds: number) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -249,6 +252,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           // Keep only the latest attempt per course.
           quizScores: [...prev.quizScores.filter((s) => s.courseId !== score.courseId), score],
         })),
+      setLessonPosition: (lessonId, seconds) =>
+        update((prev) => {
+          const pos = Math.max(0, Math.floor(seconds));
+          if ((prev.lessonPositions[lessonId] ?? 0) === pos) return prev;
+          const lessonPositions = { ...prev.lessonPositions };
+          if (pos <= 0) delete lessonPositions[lessonId];
+          else lessonPositions[lessonId] = pos;
+          return { ...prev, lessonPositions };
+        }),
     };
   }, [state, ready, update]);
 

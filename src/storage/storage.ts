@@ -38,6 +38,7 @@ export function normalizePersistedState(
     likedQuestionIds: parsed.likedQuestionIds ?? [],
     orders: parsed.orders ?? [],
     quizScores: parsed.quizScores ?? [],
+    lessonPositions: parsed.lessonPositions ?? {},
   };
 }
 

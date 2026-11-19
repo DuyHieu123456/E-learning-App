@@ -5,9 +5,9 @@
 // AppStateContext like everywhere else.
 import { useRoute } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEvent } from 'expo';
+import { useEvent, useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -39,10 +39,48 @@ export default function LessonPlayerScreen() {
 
   const player = useVideoPlayer(lesson?.videoUrl ?? null, (p) => {
     p.loop = false;
+    p.timeUpdateEventInterval = 5;
   });
   // Surface playback failures (dead URL, no network) instead of a silent
   // black box — this is how the gtv-videos-bucket 403 was first spotted.
   const { status } = useEvent(player, 'statusChange', { status: player.status });
+
+  // --- Video resume ---------------------------------------------------
+  // The last watched position lives in personal state (lessonPositions,
+  // synced per account like the rest). The live position is tracked in
+  // a ref (no re-renders), persisted when playback pauses and when the
+  // screen unmounts, and sought back once the player is ready.
+  // Finishing the video clears it, so a rewatch starts from 0.
+  const appRef = useRef(app);
+  appRef.current = app;
+  const positionRef = useRef(0);
+  const seekedRef = useRef(false);
+  const savedPosition = app.state.lessonPositions[lessonId] ?? 0;
+
+  useEventListener(player, 'timeUpdate', ({ currentTime }) => {
+    positionRef.current = currentTime;
+  });
+  useEventListener(player, 'statusChange', ({ status: next }) => {
+    if (next !== 'readyToPlay' || seekedRef.current) return;
+    seekedRef.current = true;
+    const target = appRef.current.state.lessonPositions[lessonId] ?? 0;
+    const duration = player.duration;
+    if (target > 5 && Number.isFinite(duration) && target < duration - 5) {
+      player.currentTime = target;
+    }
+  });
+  useEventListener(player, 'playingChange', ({ isPlaying }) => {
+    if (!isPlaying) appRef.current.setLessonPosition(lessonId, positionRef.current);
+  });
+  useEventListener(player, 'playToEnd', () => {
+    positionRef.current = 0;
+    appRef.current.setLessonPosition(lessonId, 0);
+  });
+  useEffect(() => {
+    return () => {
+      appRef.current.setLessonPosition(lessonId, positionRef.current);
+    };
+  }, [lessonId]);
 
   if (loading) return <LoadingView />;
   if (error || !course) return <ErrorView message={error} onRetry={retry} />;
@@ -71,6 +109,9 @@ export default function LessonPlayerScreen() {
           <Text style={styles.noVideoText}>{t('learn.noVideo')}</Text>
         </View>
       )}
+      {lesson.videoUrl && savedPosition > 5 ? (
+        <Text style={styles.hint}>{t('player.resumedFrom', { time: formatClock(savedPosition) })}</Text>
+      ) : null}
       <Text style={styles.title}>{lesson.title}</Text>
       <Text style={styles.hint}>
         {course.title} · {lesson.duration}
@@ -85,6 +126,11 @@ export default function LessonPlayerScreen() {
       </TouchableOpacity>
     </ScrollView>
   );
+}
+
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function createStyles(c: Palette) {

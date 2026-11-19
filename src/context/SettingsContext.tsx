@@ -25,6 +25,10 @@ interface Settings {
   guestSkipped: boolean;
   displayName: string; // '' = use the Google account name
   avatarUri: string; // '' = letter avatar
+  recentSearches: string[]; // newest first, max 8
+  reminderEnabled: boolean;
+  reminderHour: number;
+  reminderMinute: number;
 }
 
 const DEFAULTS: Settings = {
@@ -34,6 +38,10 @@ const DEFAULTS: Settings = {
   guestSkipped: false,
   displayName: '',
   avatarUri: '',
+  recentSearches: [],
+  reminderEnabled: false,
+  reminderHour: 19,
+  reminderMinute: 0,
 };
 
 const KEY = 'elearning.settings.v1';
@@ -53,6 +61,13 @@ export interface SettingsContextValue {
   displayName: string;
   avatarUri: string;
   setProfile: (displayName: string, avatarUri: string) => void;
+  recentSearches: string[];
+  addRecentSearch: (query: string) => void;
+  clearRecentSearches: () => void;
+  reminderEnabled: boolean;
+  reminderHour: number;
+  reminderMinute: number;
+  setReminder: (enabled: boolean, hour: number, minute: number) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -94,6 +109,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // NOTE: the study reminder is (re)scheduled ONLY from the Settings
+  // screen toggle, never from an effect here. Scheduled notifications
+  // survive reboots on their own (the OS + native module re-arm
+  // them), and touching expo-notifications at app start would
+  // evaluate its module graph even on dev builds whose APK predates
+  // the library — exactly the startup crash this avoids.
+
   const value = useMemo<SettingsContextValue>(
     () => ({
       ready,
@@ -113,6 +135,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       displayName: settings.displayName,
       avatarUri: settings.avatarUri,
       setProfile: (displayName, avatarUri) => update({ displayName, avatarUri }),
+      recentSearches: settings.recentSearches,
+      addRecentSearch: (query) => {
+        const q = query.trim();
+        if (!q) return;
+        const rest = settings.recentSearches.filter((x) => x.toLowerCase() !== q.toLowerCase());
+        update({ recentSearches: [q, ...rest].slice(0, 8) });
+      },
+      clearRecentSearches: () => update({ recentSearches: [] }),
+      reminderEnabled: settings.reminderEnabled,
+      reminderHour: settings.reminderHour,
+      reminderMinute: settings.reminderMinute,
+      setReminder: (enabled, hour, minute) => update({ reminderEnabled: enabled, reminderHour: hour, reminderMinute: minute }),
     }),
     [ready, settings, update],
   );
